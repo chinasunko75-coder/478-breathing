@@ -271,77 +271,67 @@ function playSystemTTS(text) {
 }
 
 // ═══════════════════════════════════
-//  音效
+//  音效（纯 WAV data URI，无需 AudioContext）
 // ═══════════════════════════════════
 
-let audioCtx = null;
+function makeBeepURI(freq, dur, vol) {
+  var sr = 8000; var n = Math.floor(sr * dur);
+  var h = 44 + n; var buf = new ArrayBuffer(h);
+  var v = new DataView(buf);
+  var w = function(s, o) { for (var i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w('RIFF', 0); v.setUint32(4, h - 8, true);
+  w('WAVE', 8); w('fmt ', 12); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr, true);
+  v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  w('data', 36); v.setUint32(40, n, true);
+  for (var i = 0; i < n; i++) {
+    var t = i / sr;
+    var env = Math.min(1, (n - i) / (sr * 0.02));
+    var sample = Math.sin(2 * Math.PI * freq * t) * (vol || 0.10) * env;
+    v.setUint8(44 + i, 128 + Math.round(sample * 127));
+  }
+  var bytes = new Uint8Array(buf); var bin = '';
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
 
-function initAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+var SOUNDS = {};
+
+function initSounds() {
+  SOUNDS.inhale = makeBeepURI(400, 0.45, 0.20);
+  SOUNDS.hold   = makeBeepURI(270, 0.40, 0.13);
+  SOUNDS.exhale = makeBeepURI(500, 0.55, 0.20);
+  SOUNDS.tick   = makeBeepURI(520, 0.08, 0.024);
+  SOUNDS.switch = makeBeepURI(880, 0.15, 0.06);
+  SOUNDS.done   = makeBeepURI(523, 0.50, 0.12);
+  SOUNDS.prel1  = makeBeepURI(680, 0.20, 0.15);
+  SOUNDS.prel2  = makeBeepURI(750, 0.20, 0.15);
+  SOUNDS.prel3  = makeBeepURI(820, 0.20, 0.15);
+}
+
+function playSound(uri) {
+  try {
+    var a = new Audio(uri);
+    a.volume = 1.0;
+    a.play().catch(function(){});
+  } catch(e) {}
 }
 
 function beep(type) {
-  try {
-    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'sine'; const V = 0.20;
-
-    switch(type) {
-      case 'inhale':
-        osc.frequency.setValueAtTime(400, now);
-        osc.frequency.linearRampToValueAtTime(620, now + 0.45);
-        gain.gain.setValueAtTime(V, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.45);
-        osc.start(now); osc.stop(now + 0.45); break;
-      case 'hold':
-        osc.frequency.setValueAtTime(270, now);
-        gain.gain.setValueAtTime(V*0.65, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.4);
-        osc.start(now); osc.stop(now + 0.4); break;
-      case 'exhale':
-        osc.frequency.setValueAtTime(500, now);
-        osc.frequency.linearRampToValueAtTime(330, now + 0.55);
-        gain.gain.setValueAtTime(V, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.55);
-        osc.start(now); osc.stop(now + 0.55); break;
-      case 'tick':
-        osc.frequency.setValueAtTime(520, now);
-        gain.gain.setValueAtTime(V*0.12, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-        osc.start(now); osc.stop(now + 0.08); break;
-      case 'switch':
-        osc.frequency.setValueAtTime(880, now);
-        gain.gain.setValueAtTime(V*0.3, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.15);
-        osc.start(now); osc.stop(now + 0.15); break;
-      case 'done':
-        osc.frequency.setValueAtTime(523, now);
-        osc.frequency.linearRampToValueAtTime(784, now + 0.5);
-        gain.gain.setValueAtTime(V*0.35, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.6);
-        osc.start(now); osc.stop(now + 0.6); break;
-    }
-  } catch(e) {}
+  if (!SOUNDS.inhale) initSounds();
+  if (type === 'inhale') { playSound(SOUNDS.inhale); return; }
+  if (type === 'hold')   { playSound(SOUNDS.hold); return; }
+  if (type === 'exhale') { playSound(SOUNDS.exhale); return; }
+  if (type === 'tick')   { playSound(SOUNDS.tick); return; }
+  if (type === 'switch') { playSound(SOUNDS.switch); return; }
+  if (type === 'done')   { playSound(SOUNDS.done); return; }
 }
 
 function prelude() {
-  try {
-    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
-    for (let i = 0; i < 3; i++) {
-      const t = now + i * 0.4;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(680 + i*70, t);
-      gain.gain.setValueAtTime(0.15, t);
-      gain.gain.linearRampToValueAtTime(0, t + 0.2);
-      osc.start(t); osc.stop(t + 0.2);
-    }
-  } catch(e) {}
+  playSound(SOUNDS.prel1);
+  setTimeout(function() { playSound(SOUNDS.prel2); }, 400);
+  setTimeout(function() { playSound(SOUNDS.prel3); }, 800);
 }
 
 // ═══════════════════════════════════
@@ -479,7 +469,7 @@ testBtn.addEventListener('click', async function(e) {
   testing = true;
   testBtn.textContent = '测试中…';
 
-  initAudio();
+  initSounds();
   prelude();
   await sleep(900);
   beep('inhale'); await sleep(400);
@@ -507,32 +497,10 @@ function handleStart(e) {
   if (e) e.preventDefault();
   if (s.running) return;
 
-  // 同步初始化音频（必须在手势上下文中完成）
-  initAudio();
-  // iOS 音频解锁：必须发出可听见的真声（非零增益）
-  try {
-    if (audioCtx) {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const ctx = audioCtx;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, ctx.currentTime);
-      gain.gain.setValueAtTime(0.015, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.04);
-      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.04);
-    }
-  } catch(e) {}
-  if (isIOS) {
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.getVoices();
-    const wu = new SpeechSynthesisUtterance('。');
-    // 不设 volume=0，让它在后台自然触发
-    window.speechSynthesis.speak(wu);
-  }
+  // 预热音效
+  initSounds();
 
-  // 先发一个确认音效（iOS SpeechSynthesis 首次可能无声）
+  // 先发一个确认音效
   beep('inhale');
   setTimeout(() => beep('hold'), 200);
 
@@ -555,6 +523,7 @@ if (window.speechSynthesis) {
   window.speechSynthesis.onvoiceschanged = () => {};
 }
 
+initSounds();
 resetAll();
 </script>
 </body>
