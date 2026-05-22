@@ -110,7 +110,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;color:#e0e0e
 const STORAGE_KEY = 'glute_bridge_day';
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-let audioCtx = null;
 let s = {
   state: 'idle',    // idle | active | paused | done
   session: 1,       // 1-3
@@ -187,108 +186,110 @@ function saveDay() {
 // ════════════════════════════════════════
 //  音频
 // ════════════════════════════════════════
-function initAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+// ════════════════════════════════════════
+//  纯 WAV 音效（无需 AudioContext，兼容 iOS）
+// ════════════════════════════════════════
+// 用数学计算生成 WAV 文件，嵌入为 data: URI，通过 <audio> 播放
+// 完全绕过 iOS Safari 的 AudioContext 限制
+
+function makeBeepURI(freq, dur, vol) {
+  const sr = 8000; const n = Math.floor(sr * dur);
+  const h = 44 + n; const buf = new ArrayBuffer(h);
+  const v = new DataView(buf);
+  const w = function(s, o) { for (var i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w('RIFF', 0); v.setUint32(4, h - 8, true);
+  w('WAVE', 8); w('fmt ', 12); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr, true);
+  v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  w('data', 36); v.setUint32(40, n, true);
+  for (var i = 0; i < n; i++) {
+    var t = i / sr;
+    var env = Math.min(1, (n - i) / (sr * 0.02));
+    var sample = Math.sin(2 * Math.PI * freq * t) * (vol || 0.10) * env;
+    v.setUint8(44 + i, 128 + Math.round(sample * 127));
+  }
+  var bytes = new Uint8Array(buf); var bin = '';
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+
+var SOUNDS = {}; // 预生成的音效
+
+function initSounds() {
+  SOUNDS.beep800 = makeBeepURI(800, 0.15, 0.10);
+  SOUNDS.beep1000 = makeBeepURI(1000, 0.15, 0.10);
+  SOUNDS.beepRise = makeBeepURI(400, 0.35, 0.12);   // 简化的单音
+  SOUNDS.beepFall = makeBeepURI(500, 0.40, 0.10);     // 简化的单音
+  SOUNDS.beepTick = makeBeepURI(900, 0.06, 0.06);
+  // 里程碑三连音
+  SOUNDS.milestone1 = makeBeepURI(500, 0.10, 0.12);
+  SOUNDS.milestone2 = makeBeepURI(700, 0.10, 0.12);
+  SOUNDS.milestone3 = makeBeepURI(900, 0.10, 0.12);
+}
+
+function playSound(uri) {
+  try {
+    var a = new Audio(uri);
+    a.volume = 1.0;
+    a.play().catch(function(){});
+  } catch(e) {}
 }
 
 function beep(freq, dur, vol) {
-  try {
-    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, now);
-    gain.gain.setValueAtTime(vol||0.10, now);
-    gain.gain.linearRampToValueAtTime(0, now + dur);
-    osc.start(now); osc.stop(now + dur);
-  } catch(e) {}
+  if (SOUNDS.beep800) { // sounds already initialized
+    playSound(makeBeepURI(freq, dur, vol));
+    return;
+  }
+  initSounds();
+  playSound(makeBeepURI(freq, dur, vol));
 }
 
-function beepRise() {
-  try {
-    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(400, now);
-    osc.frequency.linearRampToValueAtTime(650, now + 0.35);
-    gain.gain.setValueAtTime(0.12, now);
-    gain.gain.linearRampToValueAtTime(0, now + 0.35);
-    osc.start(now); osc.stop(now + 0.35);
-  } catch(e) {}
-}
-
-function beepFall() {
-  try {
-    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(500, now);
-    osc.frequency.linearRampToValueAtTime(350, now + 0.4);
-    gain.gain.setValueAtTime(0.10, now);
-    gain.gain.linearRampToValueAtTime(0, now + 0.4);
-    osc.start(now); osc.stop(now + 0.4);
-  } catch(e) {}
-}
-
-function beepTick() {
-  beep(900, 0.05, 0.05);
-}
-
+function beepRise() { playSound(SOUNDS.beepRise); }
+function beepFall() { playSound(SOUNDS.beepFall); }
+function beepTick() { playSound(SOUNDS.beepTick); }
 function milestoneSound() {
-  try {
-    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
-    [0,0.12,0.24].forEach((off,i)=>{
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(500+i*200, now+off);
-      gain.gain.setValueAtTime(0.12, now+off);
-      gain.gain.linearRampToValueAtTime(0, now+off+0.1);
-      osc.start(now+off); osc.stop(now+off+0.12);
-    });
-  } catch(e) {}
+  playSound(SOUNDS.milestone1);
+  setTimeout(function() { playSound(SOUNDS.milestone2); }, 120);
+  setTimeout(function() { playSound(SOUNDS.milestone3); }, 240);
 }
 
 // ════════════════════════════════════════
-//  语音
+//  语音（简化版，兼容 iOS）
 // ════════════════════════════════════════
 function playGoogleTTS(text) {
-  return new Promise((resolve, reject) => {
-    const audio = new Audio();
+  return new Promise(function(resolve) {
+    var audio = new Audio();
     audio.src = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=' + encodeURIComponent(text);
-    audio.onended = () => resolve();
-    audio.onerror = () => reject();
-    audio.play().catch(reject);
-    const t = setTimeout(() => reject(new Error('timeout')), 5000);
-    audio.addEventListener('loadedmetadata', () => clearTimeout(t));
+    var done = false;
+    var finish = function() { if (!done) { done = true; resolve(); } };
+    audio.onended = finish;
+    audio.onerror = finish;
+    audio.play().catch(finish);
+    setTimeout(finish, 4000);
   });
 }
 
 function playSystemTTS(text) {
-  return new Promise((resolve) => {
+  return new Promise(function(resolve) {
     if (!window.speechSynthesis) return resolve();
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'zh-CN'; u.rate = 0.88; u.pitch = 1.05; u.volume = 0.8;
-    const voices = window.speechSynthesis.getVoices();
-    const zh = voices.find(v => v.lang.startsWith('zh') && (v.name.includes('Female') || !v.name.includes('Male')));
-    if (zh) u.voice = zh;
-    u.onend = () => resolve();
-    u.onerror = () => resolve();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN'; u.rate = 0.88; u.volume = 0.8;
+    // iOS 上不用指定语音，用系统默认
+    var done = false;
+    var finish = function() { if (!done) { done = true; resolve(); } };
+    u.onend = finish;
+    u.onerror = finish;
     window.speechSynthesis.speak(u);
+    // 超时保护：防止 iOS SpeechSynthesis 卡死
+    setTimeout(finish, 3000);
   });
 }
 
 async function speak(text) {
   if (!text || text.trim() === '') return;
-  const now = Date.now();
+  var now = Date.now();
   if (now - lastSpeakTime < 150) await sleep(150);
   lastSpeakTime = Date.now();
   isSpeaking = true;
@@ -297,11 +298,6 @@ async function speak(text) {
     else { try { await playGoogleTTS(text); } catch(e) { await playSystemTTS(text); } }
   } catch(e) {}
   isSpeaking = false;
-}
-
-function speakPhrase(text) {
-  if (!text || text.trim() === ' ') return;
-  speak(text);
 }
 
 // ════════════════════════════════════════
@@ -592,34 +588,16 @@ function handleStart() {
     return;
   }
 
-  // ⚡ 在手势上下文中同步初始化音频
-  initAudio();
+  // 预热音效和语音（在手势上下文中让 iOS 允许音频播放）
+  initSounds();
 
-  // iOS 音频解锁：必须发出可听见的声音（非零音量）才能生效
-  try {
-    if (audioCtx) {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const ctx = audioCtx;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, ctx.currentTime);
-      gain.gain.setValueAtTime(0.015, ctx.currentTime); // 非常轻的一声
-      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.04);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.04);
-    }
-  } catch(e) {}
+  // iOS: 在手势中播放一个微小音效解锁音频通道
+  playSound(SOUNDS.beepTick);
 
-  // iOS SpeechSynthesis 预热（用有声语句，iOS 需要真声触发）
+  // 预热 SpeechSynthesis
   if (isIOS && window.speechSynthesis) {
     window.speechSynthesis.cancel();
     window.speechSynthesis.getVoices();
-    const wu2 = new SpeechSynthesisUtterance('。');
-    // 不设 volume=0，让它在后台轻响一下
-    window.speechSynthesis.speak(wu2);
   }
 
   s.reps = 0;
@@ -716,6 +694,7 @@ el.reset.addEventListener('click', () => {
 //  初始化
 // ════════════════════════════════════════
 function init() {
+  initSounds();
   loadDay();
   updateDisplay();
   setPhase('idle');
