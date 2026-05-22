@@ -134,6 +134,10 @@ let isSpeaking = false;
 let speakQueue = [];
 let animFrame = null;
 
+// 跟踪当前阶段（用于暂停恢复）
+let currentPhaseKey = null;
+let repIncrementReady = true;
+
 const el = {
   circle: document.getElementById('circle'),
   glow: document.getElementById('glow'),
@@ -402,103 +406,102 @@ async function trainingLoop() {
   await speak('第' + (cn[s.session-1]||s.session) + '次训练开始');
   await sleep(300);
 
-  // 主循环：做50个或到100个，直到取消
+  // 主循环
   while (s.reps < 100 && !cancelLoop) {
-    // 检查暂停
+    // 暂停检测
     if (s.state === 'paused') {
-      el.glow.classList.add('pause-glow');
-      setPhase('pause');
-      await new Promise(resolve => { pauseResolver = resolve; });
+      await waitForResume();
       if (cancelLoop) break;
-      el.glow.classList.remove('pause-glow');
-      el.glow.classList.add('on');
-      // 恢复后继续
     }
 
-    // ── 抬起 ──
+    // ── 本轮新动作开始 ──
     s.reps++;
     updateDisplay();
+
+    // 抬起阶段
+    currentPhaseKey = 'lift';
+    if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
     beepRise();
     await speak('抬起');
-    const liftDur = PHASES.lift.dur;
     setPhase('lift', '');
-    await countdownWithPause(liftDur, 0.3);
-
+    await countdownWithPause(PHASES.lift.dur, 0.3);
     if (cancelLoop) break;
+    if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
 
-    // ── 保持 ──
-    speakPhrase('保持');
-    const holdDur = PHASES.hold.dur;
+    // 保持阶段
+    currentPhaseKey = 'hold';
+    if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
     setPhase('hold', '');
-    await countdownWithPause(holdDur, 0.8);
-
+    await countdownWithPause(PHASES.hold.dur, 0.8);
     if (cancelLoop) break;
+    if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
 
-    // ── 放下 ──
+    // 放下阶段
+    currentPhaseKey = 'lower';
+    if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
     beepFall();
     await speak('放下');
-    const lowerDur = PHASES.lower.dur;
     setPhase('lower', '');
-    await countdownWithPause(lowerDur, 0.3);
-
+    await countdownWithPause(PHASES.lower.dur, 0.3);
     if (cancelLoop) break;
+    if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
 
-    // ── 休息 ──
-    speakPhrase('休息');
-    const restDur = PHASES.rest.dur;
+    // 休息阶段
+    currentPhaseKey = 'rest';
+    if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
     setPhase('rest', '');
-    await countdownWithPause(restDur, 0.8);
-
+    await countdownWithPause(PHASES.rest.dur, 0.8);
     if (cancelLoop) break;
 
     // 每轮结束后检查里程碑
     checkMilestone(s.reps);
 
-    // 如果达到50个且用户没有手动结束，提示完成
     if (s.reps === 50) {
       await speak('五十个完成，做得很好。可以继续或结束训练');
     }
   }
 
-  // 训练结束
   finishSession();
 }
 
+function waitForResume() {
+  return new Promise(resolve => {
+    el.glow.classList.add('pause-glow');
+    setPhase('pause');
+    pauseResolver = () => {
+      el.glow.classList.remove('pause-glow');
+      el.glow.classList.add('on');
+      resolve();
+    };
+  });
+}
+
 async function countdownWithPause(duration, tickEvery) {
-  // 每秒滴一声
   const start = Date.now();
   let lastTick = 0;
 
   while (true) {
     const elapsed = (Date.now() - start) / 1000;
-    if (elapsed >= duration || cancelLoop) break;
-
-    // 检查暂停
-    if (s.state === 'paused') {
-      // 暂停期间不更新计时，等待恢复
-      await new Promise(resolve => { pauseResolver = resolve; });
-      // 恢复后重置开始时间，避免跳秒
-      // 重新计算剩余时间
-      break; // 退出当前 countdown，训练循环会检测暂停并处理
+    if (elapsed >= duration || cancelLoop || s.state === 'paused') {
+      if (s.state === 'paused' && elapsed < duration) {
+        // 暂停了，交给外部处理
+        el.timer.textContent = '';
+        return; // 让主循环处理暂停
+      }
+      break;
     }
 
-    // 每秒滴答
     const sec = Math.floor(elapsed);
     if (sec > lastTick) {
       lastTick = sec;
       if (sec < duration) beepTick();
-      // 更新计时显示
       const remaining = Math.ceil(duration - elapsed);
       el.timer.textContent = remaining + 's';
     }
 
     await sleep(50);
   }
-
-  // 如果因为暂停退出，确保 timer 清空
-  if (s.state !== 'paused') {
-    el.timer.textContent = '';
-  }
+  el.timer.textContent = '';
 }
 
 function checkMilestone(reps) {
@@ -545,6 +548,14 @@ function togglePause() {
     speak('已暂停');
   } else if (s.state === 'paused') {
     s.state = 'active';
+    // 恢复阶段显示
+    if (currentPhaseKey) {
+      setPhase(currentPhaseKey, '');
+    } else {
+      el.phase.textContent = '继续训练';
+      el.phase.className = 'phase';
+    }
+    el.timer.textContent = '';
     el.action.textContent = '暂停';
     el.action.classList.remove('paused');
     el.action.classList.add('running');
@@ -552,10 +563,10 @@ function togglePause() {
     el.glow.classList.add('on');
     beepRise();
     speak('继续');
-    // 唤醒倒计时
     if (pauseResolver) {
-      pauseResolver();
+      const r = pauseResolver;
       pauseResolver = null;
+      r();
     }
   }
 }
@@ -575,7 +586,12 @@ async function handleStart() {
   }
 
   initAudio();
-  if (isIOS) window.speechSynthesis.getVoices();
+  // iOS: 预热语音引擎
+  if (isIOS) {
+    window.speechSynthesis.getVoices();
+    // 预热 Google TTS 音频
+    try { await playGoogleTTS(' '); } catch(e) {}
+  }
   s.reps = 0;
   s.state = 'active';
   updateDisplay();
@@ -591,19 +607,30 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 // ════════════════════════════════════════
 //  事件绑定
 // ════════════════════════════════════════
-el.action.addEventListener('click', handleStart);
-el.action.addEventListener('touchstart', e => {
-  if (e) { e.preventDefault(); handleStart(); }
+// 防止 iOS touch → click 重复触发
+let touchHandled = false;
+
+el.action.addEventListener('click', function(e) {
+  if (touchHandled) { touchHandled = false; return; }
+  handleStart();
+});
+el.action.addEventListener('touchstart', function(e) {
+  touchHandled = true;
+  e.preventDefault();
+  handleStart();
 }, { passive: false });
 
 // 点击圆也可以暂停/继续
-el.circle.addEventListener('click', () => {
+el.circle.addEventListener('click', function() {
+  if (touchHandled) { touchHandled = false; return; }
   if (s.state === 'active' || s.state === 'paused') togglePause();
   else if (s.state === 'idle' && s.session <= 3) handleStart();
 });
-el.circle.addEventListener('touchstart', e => {
-  if (s.state === 'active' || s.state === 'paused') { e.preventDefault(); togglePause(); }
-  else if (s.state === 'idle' && s.session <= 3) { e.preventDefault(); handleStart(); }
+el.circle.addEventListener('touchstart', function(e) {
+  touchHandled = true;
+  e.preventDefault();
+  if (s.state === 'active' || s.state === 'paused') togglePause();
+  else if (s.state === 'idle' && s.session <= 3) handleStart();
 }, { passive: false });
 
 // 空格键
@@ -617,6 +644,7 @@ document.addEventListener('keydown', e => {
 
 // 测试声音
 el.test.addEventListener('click', async () => {
+  if (touchHandled) { touchHandled = false; return; }
   if (testing) return; testing = true;
   el.test.textContent = '测试中';
   initAudio();
@@ -626,7 +654,18 @@ el.test.addEventListener('click', async () => {
   el.test.textContent = '测试声音';
   testing = false;
 });
-el.test.addEventListener('touchstart', e => { e.preventDefault(); if (!testing) el.test.click(); }, { passive: false });
+el.test.addEventListener('touchstart', async function(e) {
+  touchHandled = true;
+  e.preventDefault();
+  if (testing) return; testing = true;
+  el.test.textContent = '测试中';
+  initAudio();
+  beepRise(); await sleep(500);
+  try { await speak('这是测试语音'); } catch(e) {}
+  await sleep(500);
+  el.test.textContent = '测试声音';
+  testing = false;
+}, { passive: false });
 
 // 重置
 el.reset.addEventListener('click', () => {
