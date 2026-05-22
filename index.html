@@ -503,16 +503,37 @@ testBtn.addEventListener('click', async function(e) {
 //  入口
 // ═══════════════════════════════════
 
-async function handleStart(e) {
-  e.preventDefault();
+function handleStart(e) {
+  if (e) e.preventDefault();
   if (s.running) return;
+
+  // 同步初始化音频（必须在手势上下文中完成）
   initAudio();
-  if (isIOS) window.speechSynthesis.getVoices();
-  await run();
+  // 发出无声测试音锁定 AudioContext
+  try {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    gain.gain.value = 0; osc.start(); osc.stop(audioCtx.currentTime + 0.001);
+  } catch(e) {}
+  if (isIOS) {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.getVoices();
+    const wu = new SpeechSynthesisUtterance('。');
+    wu.volume = 0;
+    window.speechSynthesis.speak(wu);
+  }
+
+  // 先发一个确认音效（iOS SpeechSynthesis 首次可能无声）
+  beep('inhale');
+  setTimeout(() => beep('hold'), 200);
+
+  run();
 }
 
 actionBtn.addEventListener('click', handleStart);
-actionBtn.addEventListener('touchstart', e => { if (!s.running) { e.preventDefault(); handleStart(e); } }, { passive: false });
+actionBtn.addEventListener('touchstart', e => { e.preventDefault(); handleStart(e); }, { passive: false });
 
 // 空格键
 document.addEventListener('keydown', e => {

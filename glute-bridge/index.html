@@ -401,9 +401,14 @@ async function trainingLoop() {
   el.glow.classList.remove('pause-glow');
   updateDisplay();
 
+  // 开场先用音效确认（iOS SpeechSynthesis 首次可能无声）
+  beep(800, 0.15, 0.10);
+  await sleep(200);
+  beep(1000, 0.15, 0.10);
+
   // 开场语音
   const cn = ['一','二','三','四','五','六','七','八','九','十'];
-  await speak('第' + (cn[s.session-1]||s.session) + '次训练开始');
+  try { await speak('第' + (cn[s.session-1]||s.session) + '次训练开始'); } catch(e) {}
   await sleep(300);
 
   // 主循环
@@ -574,7 +579,9 @@ function togglePause() {
 // ════════════════════════════════════════
 //  开始训练
 // ════════════════════════════════════════
-async function handleStart() {
+// 注意：这个函数是同步的！在 iOS 上不能加 async，
+// 否则第一步 await 会丢失手势上下文，导致 AudioContext 无法使用
+function handleStart() {
   if (s.state === 'active' || s.state === 'paused') {
     togglePause();
     return;
@@ -585,17 +592,38 @@ async function handleStart() {
     return;
   }
 
+  // ⚡ 在手势上下文中同步初始化音频
   initAudio();
-  // iOS: 预热语音引擎
-  if (isIOS) {
+
+  // 发出一个无声测试音，锁定 AudioContext 的激活状态
+  try {
+    if (audioCtx) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const ctx = audioCtx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.value = 0;
+      osc.start();
+      osc.stop(ctx.currentTime + 0.001);
+    }
+  } catch(e) {}
+
+  // iOS SpeechSynthesis 预热（同步操作）
+  if (isIOS && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
     window.speechSynthesis.getVoices();
-    // 预热 Google TTS 音频
-    try { await playGoogleTTS(' '); } catch(e) {}
+    const warmup = new SpeechSynthesisUtterance('。');
+    warmup.volume = 0;
+    window.speechSynthesis.speak(warmup);
   }
+
   s.reps = 0;
   s.state = 'active';
   updateDisplay();
 
+  // 异步启动训练循环（此时音频已经预热完毕）
   trainingLoop();
 }
 
