@@ -512,7 +512,7 @@ async function handleStart(e) {
 }
 
 actionBtn.addEventListener('click', handleStart);
-actionBtn.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+actionBtn.addEventListener('touchstart', e => { if (!s.running) { e.preventDefault(); handleStart(e); } }, { passive: false });
 
 // 空格键
 document.addEventListener('keydown', e => {
