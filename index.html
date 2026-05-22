@@ -509,19 +509,26 @@ function handleStart(e) {
 
   // 同步初始化音频（必须在手势上下文中完成）
   initAudio();
-  // 发出无声测试音锁定 AudioContext
+  // iOS 音频解锁：必须发出可听见的真声（非零增益）
   try {
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    gain.gain.value = 0; osc.start(); osc.stop(audioCtx.currentTime + 0.001);
+    if (audioCtx) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const ctx = audioCtx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      gain.gain.setValueAtTime(0.015, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.04);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.04);
+    }
   } catch(e) {}
   if (isIOS) {
     window.speechSynthesis.cancel();
     window.speechSynthesis.getVoices();
     const wu = new SpeechSynthesisUtterance('。');
-    wu.volume = 0;
+    // 不设 volume=0，让它在后台自然触发
     window.speechSynthesis.speak(wu);
   }
 
