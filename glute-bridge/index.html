@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>高位臀桥训练</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;color:#e0e0e6;font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;user-select:none;-webkit-user-select:none}
+
+.container{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:env(safe-area-inset-top,12px) 24px env(safe-area-inset-bottom,32px);position:relative}
+
+/* ── 顶部 ── */
+.header{text-align:center;padding-top:8px}
+.header h1{font-size:22px;font-weight:600;letter-spacing:2px;color:#d4d4de}
+.header .session-info{font-size:13px;color:#666;margin-top:4px;letter-spacing:1px}
+.header .session-info span{color:#4ade80}
+
+/* ── 中心大圆 ── */
+.circle-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;position:relative}
+.circle{position:relative;width:min(280px,70vw);height:min(280px,70vw);border-radius:50%;background:radial-gradient(circle at 30% 30%,#1a1a28,#0f0f18);border:2px solid #2a2a3a;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:border-color .3s}
+.circle.active{border-color:#4ade80}
+.circle .count{font-size:min(96px,23vw);font-weight:700;line-height:1;color:#f0f0f6;font-variant-numeric:tabular-nums}
+.circle .phase{font-size:min(22px,5.5vw);color:#4ade80;margin-top:6px;letter-spacing:3px;font-weight:500;height:28px}
+.circle .phase.pause-text{color:#fbbf24}
+.circle .phase.done-text{color:#60a5fa}
+.circle .timer{font-size:min(15px,3.8vw);color:#888;margin-top:2px;height:20px}
+
+/* ── 光环 ── */
+.glow{position:absolute;inset:-6px;border-radius:50%;opacity:0;transition:opacity .6s;pointer-events:none}
+.glow.on{opacity:1;box-shadow:0 0 30px 6px rgba(74,222,128,.25),0 0 60px 12px rgba(74,222,128,.1)}
+.glow.pause-glow{box-shadow:0 0 30px 6px rgba(251,191,36,.25),0 0 60px 12px rgba(251,191,36,.1)}
+
+/* ── 进度圆环 ── */
+.ring-svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);pointer-events:none}
+.ring-bg{fill:none;stroke:#1e1e2e;stroke-width:3}
+.ring-fg{fill:none;stroke:rgba(74,222,128,.35);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .4s ease}
+.ring-pause{stroke:rgba(251,191,36,.35)}
+
+/* ── 底部控制 ── */
+.controls{width:100%;display:flex;flex-direction:column;align-items:center;gap:16px}
+
+.dots{display:flex;gap:10px}
+.dot{width:10px;height:10px;border-radius:50%;background:#2a2a3a;transition:all .3s}
+.dot.done{background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.3)}
+
+.action-btn{-webkit-appearance:none;border:none;outline:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:16px;font-weight:600;padding:14px 40px;border-radius:30px;cursor:pointer;transition:all .25s;letter-spacing:3px;min-width:140px}
+.action-btn:active{transform:scale(.95)}
+.action-btn.running{background:rgba(74,222,128,.12);color:#4ade80;font-size:20px;letter-spacing:8px;min-width:140px}
+.action-btn.paused{background:rgba(251,191,36,.15);color:#fbbf24;font-size:16px;letter-spacing:3px;min-width:140px}
+
+.sub-row{display:flex;align-items:center;gap:16px}
+.test-btn{font-size:13px;color:#555;text-decoration:none;border:none;background:none;cursor:pointer;transition:color .2s}
+.test-btn:active{color:#888}
+
+/* ── 庆祝效果 ── */
+.confetti-wrap{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.confetti{position:absolute;width:6px;height:6px;border-radius:50%;opacity:0;animation:confetti-fall 2s ease-out forwards}
+@keyframes confetti-fall{0%{opacity:1;transform:translateY(0) rotate(0deg) scale(1)}100%{opacity:0;transform:translateY(300px) rotate(720deg) scale(.3)}}
+
+@media(max-width:420px){
+  .circle{width:min(240px,68vw);height:min(240px,68vw)}
+  .circle .count{font-size:min(80px,22vw)}
+}
+</style>
+</head>
+<body>
+<div class="container" id="app">
+
+  <div class="header">
+    <h1>高位臀桥</h1>
+    <div class="session-info" id="sessionInfo">第 <span>1</span> 次训练 · 今日 <span id="dayTotal">0</span> 个</div>
+  </div>
+
+  <div class="circle-wrap">
+    <div class="circle" id="circle">
+      <div class="glow" id="glow"></div>
+      <svg class="ring-svg" viewBox="0 0 100 100">
+        <circle class="ring-bg" cx="50" cy="50" r="46"/>
+        <circle class="ring-fg" id="ringFg" cx="50" cy="50" r="46"
+          stroke-dasharray="289" stroke-dashoffset="289"/>
+      </svg>
+      <div class="count" id="countDisplay">0</div>
+      <div class="phase" id="phaseLabel">准备开始</div>
+      <div class="timer" id="timerLabel"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="dots" id="dots">
+      <div class="dot" data-i="0"></div>
+      <div class="dot" data-i="1"></div>
+      <div class="dot" data-i="2"></div>
+    </div>
+    <button class="action-btn" id="actionBtn">开始训练</button>
+    <div class="sub-row">
+      <button class="test-btn" id="testBtn">测试声音</button>
+      <button class="test-btn" id="resetBtn" style="display:none">重置今日</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════
+//  状态
+// ════════════════════════════════════════
+const STORAGE_KEY = 'glute_bridge_day';
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+let audioCtx = null;
+let s = {
+  state: 'idle',    // idle | active | paused | done
+  session: 1,       // 1-3
+  reps: 0,          // 当前次数
+  dayTotal: 0       // 今日总次数
+};
+
+// 阶段计时（秒）
+const PHASES = {
+  lift:   { dur: 2.0, label: '抬起',      voice: '抬起' },
+  hold:   { dur: 4.0, label: '保持',      voice: ' ' },
+  lower:  { dur: 2.0, label: '慢慢放下',  voice: '慢慢放下' },
+  rest:   { dur: 3.0, label: '休息',      voice: ' ' },
+};
+const PHASE_KEYS = ['lift','hold','lower','rest'];
+
+let testing = false;
+let repTimer = null;
+let lastSpeakTime = 0;
+let isSpeaking = false;
+let speakQueue = [];
+let animFrame = null;
+
+const el = {
+  circle: document.getElementById('circle'),
+  glow: document.getElementById('glow'),
+  count: document.getElementById('countDisplay'),
+  phase: document.getElementById('phaseLabel'),
+  timer: document.getElementById('timerLabel'),
+  session: document.querySelector('#sessionInfo span'),
+  dayTotal: document.getElementById('dayTotal'),
+  dots: document.querySelectorAll('.dot'),
+  action: document.getElementById('actionBtn'),
+  test: document.getElementById('testBtn'),
+  reset: document.getElementById('resetBtn'),
+  ring: document.getElementById('ringFg'),
+};
+
+// ════════════════════════════════════════
+//  本地存储
+// ════════════════════════════════════════
+function loadDay() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      const today = new Date().toDateString();
+      if (d.date === today) {
+        s.dayTotal = d.total || 0;
+        if (d.total >= 150) s.session = 3;
+        else if (d.total >= 50) s.session = 2;
+        else s.session = 1;
+        return;
+      }
+    }
+  } catch(e) {}
+  s.dayTotal = 0; s.session = 1;
+  saveDay();
+}
+
+function saveDay() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      date: new Date().toDateString(),
+      total: s.dayTotal
+    }));
+  } catch(e) {}
+}
+
+// ════════════════════════════════════════
+//  音频
+// ════════════════════════════════════════
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function beep(freq, dur, vol) {
+  try {
+    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime(vol||0.10, now);
+    gain.gain.linearRampToValueAtTime(0, now + dur);
+    osc.start(now); osc.stop(now + dur);
+  } catch(e) {}
+}
+
+function beepRise() {
+  try {
+    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(400, now);
+    osc.frequency.linearRampToValueAtTime(650, now + 0.35);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.35);
+    osc.start(now); osc.stop(now + 0.35);
+  } catch(e) {}
+}
+
+function beepFall() {
+  try {
+    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(500, now);
+    osc.frequency.linearRampToValueAtTime(350, now + 0.4);
+    gain.gain.setValueAtTime(0.10, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.4);
+    osc.start(now); osc.stop(now + 0.4);
+  } catch(e) {}
+}
+
+function beepTick() {
+  beep(900, 0.05, 0.05);
+}
+
+function milestoneSound() {
+  try {
+    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
+    [0,0.12,0.24].forEach((off,i)=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(500+i*200, now+off);
+      gain.gain.setValueAtTime(0.12, now+off);
+      gain.gain.linearRampToValueAtTime(0, now+off+0.1);
+      osc.start(now+off); osc.stop(now+off+0.12);
+    });
+  } catch(e) {}
+}
+
+// ════════════════════════════════════════
+//  语音
+// ════════════════════════════════════════
+function playGoogleTTS(text) {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio();
+    audio.src = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=' + encodeURIComponent(text);
+    audio.onended = () => resolve();
+    audio.onerror = () => reject();
+    audio.play().catch(reject);
+    const t = setTimeout(() => reject(new Error('timeout')), 5000);
+    audio.addEventListener('loadedmetadata', () => clearTimeout(t));
+  });
+}
+
+function playSystemTTS(text) {
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) return resolve();
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN'; u.rate = 0.88; u.pitch = 1.05; u.volume = 0.8;
+    const voices = window.speechSynthesis.getVoices();
+    const zh = voices.find(v => v.lang.startsWith('zh') && (v.name.includes('Female') || !v.name.includes('Male')));
+    if (zh) u.voice = zh;
+    u.onend = () => resolve();
+    u.onerror = () => resolve();
+    window.speechSynthesis.speak(u);
+  });
+}
+
+async function speak(text) {
+  if (!text || text.trim() === '') return;
+  const now = Date.now();
+  if (now - lastSpeakTime < 150) await sleep(150);
+  lastSpeakTime = Date.now();
+  isSpeaking = true;
+  try {
+    if (isIOS) { await playSystemTTS(text); }
+    else { try { await playGoogleTTS(text); } catch(e) { await playSystemTTS(text); } }
+  } catch(e) {}
+  isSpeaking = false;
+}
+
+function speakPhrase(text) {
+  if (!text || text.trim() === ' ') return;
+  speak(text);
+}
+
+// ════════════════════════════════════════
+//  UI 更新
+// ════════════════════════════════════════
+function updateDisplay() {
+  el.count.textContent = s.reps;
+  el.session.textContent = s.session;
+  el.dayTotal.textContent = s.dayTotal;
+
+  // 进度环
+  const target = 50;
+  const pct = Math.min(s.reps / target, 1);
+  const circ = 289;
+  el.ring.setAttribute('stroke-dashoffset', circ - pct * circ);
+
+  // 圆点
+  el.dots.forEach((d, i) => {
+    d.classList.toggle('done', i < s.session);
+  });
+
+  // 按钮文字
+  if (s.state === 'idle') {
+    el.action.textContent = s.session > 3 ? '已完成' : '开始训练';
+    el.action.classList.remove('running','paused');
+  } else if (s.state === 'active') {
+    el.action.textContent = '暂停';
+    el.action.classList.add('running');
+    el.action.classList.remove('paused');
+  } else if (s.state === 'paused') {
+    el.action.textContent = '继续';
+    el.action.classList.add('paused');
+    el.action.classList.remove('running');
+  } else if (s.state === 'done') {
+    el.action.textContent = '已完成';
+    el.action.classList.remove('running','paused');
+  }
+}
+
+function setPhase(name, timerText) {
+  const phaseInfo = PHASES[name];
+  if (!phaseInfo) {
+    if (name === 'idle') {
+      el.phase.textContent = '准备开始';
+      el.phase.className = 'phase';
+      el.timer.textContent = '';
+    } else if (name === 'done') {
+      el.phase.textContent = s.session > 3 ? '今日训练完成!' : '本次训练完成!';
+      el.phase.className = 'phase done-text';
+      el.timer.textContent = '明天继续 💪';
+    } else if (name === 'pause') {
+      el.phase.textContent = '已暂停';
+      el.phase.className = 'phase pause-text';
+      el.timer.textContent = '点击继续';
+    }
+    return;
+  }
+  el.phase.textContent = phaseInfo.label;
+  el.phase.className = 'phase';
+  el.timer.textContent = timerText || '';
+}
+
+// ════════════════════════════════════════
+//  庆祝效果
+// ════════════════════════════════════════
+function celebrate() {
+  milestoneSound();
+  const wrap = document.createElement('div');
+  wrap.className = 'confetti-wrap';
+  el.circle.appendChild(wrap);
+  const colors = ['#4ade80','#60a5fa','#fbbf24','#f472b6','#a78bfa','#34d399'];
+  for (let i = 0; i < 30; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.left = Math.random() * 100 + '%';
+    c.style.top = '40%';
+    c.style.background = colors[Math.floor(Math.random()*colors.length)];
+    c.style.animationDelay = Math.random() * 0.8 + 's';
+    c.style.width = (3 + Math.random()*5) + 'px';
+    c.style.height = c.style.width;
+    wrap.appendChild(c);
+  }
+  setTimeout(() => wrap.remove(), 3000);
+}
+
+// ════════════════════════════════════════
+//  训练主循环
+// ════════════════════════════════════════
+let cancelLoop = false;
+let pauseResolver = null;
+
+async function trainingLoop() {
+  cancelLoop = false;
+  s.state = 'active';
+  el.circle.classList.add('active');
+  el.glow.classList.add('on');
+  el.glow.classList.remove('pause-glow');
+  updateDisplay();
+
+  // 开场语音
+  const cn = ['一','二','三','四','五','六','七','八','九','十'];
+  await speak('第' + (cn[s.session-1]||s.session) + '次训练开始');
+  await sleep(300);
+
+  // 主循环：做50个或到100个，直到取消
+  while (s.reps < 100 && !cancelLoop) {
+    // 检查暂停
+    if (s.state === 'paused') {
+      el.glow.classList.add('pause-glow');
+      setPhase('pause');
+      await new Promise(resolve => { pauseResolver = resolve; });
+      if (cancelLoop) break;
+      el.glow.classList.remove('pause-glow');
+      el.glow.classList.add('on');
+      // 恢复后继续
+    }
+
+    // ── 抬起 ──
+    s.reps++;
+    updateDisplay();
+    beepRise();
+    await speak('抬起');
+    const liftDur = PHASES.lift.dur;
+    setPhase('lift', '');
+    await countdownWithPause(liftDur, 0.3);
+
+    if (cancelLoop) break;
+
+    // ── 保持 ──
+    speakPhrase('保持');
+    const holdDur = PHASES.hold.dur;
+    setPhase('hold', '');
+    await countdownWithPause(holdDur, 0.8);
+
+    if (cancelLoop) break;
+
+    // ── 放下 ──
+    beepFall();
+    await speak('放下');
+    const lowerDur = PHASES.lower.dur;
+    setPhase('lower', '');
+    await countdownWithPause(lowerDur, 0.3);
+
+    if (cancelLoop) break;
+
+    // ── 休息 ──
+    speakPhrase('休息');
+    const restDur = PHASES.rest.dur;
+    setPhase('rest', '');
+    await countdownWithPause(restDur, 0.8);
+
+    if (cancelLoop) break;
+
+    // 每轮结束后检查里程碑
+    checkMilestone(s.reps);
+
+    // 如果达到50个且用户没有手动结束，提示完成
+    if (s.reps === 50) {
+      await speak('五十个完成，做得很好。可以继续或结束训练');
+    }
+  }
+
+  // 训练结束
+  finishSession();
+}
+
+async function countdownWithPause(duration, tickEvery) {
+  // 每秒滴一声
+  const start = Date.now();
+  let lastTick = 0;
+
+  while (true) {
+    const elapsed = (Date.now() - start) / 1000;
+    if (elapsed >= duration || cancelLoop) break;
+
+    // 检查暂停
+    if (s.state === 'paused') {
+      // 暂停期间不更新计时，等待恢复
+      await new Promise(resolve => { pauseResolver = resolve; });
+      // 恢复后重置开始时间，避免跳秒
+      // 重新计算剩余时间
+      break; // 退出当前 countdown，训练循环会检测暂停并处理
+    }
+
+    // 每秒滴答
+    const sec = Math.floor(elapsed);
+    if (sec > lastTick) {
+      lastTick = sec;
+      if (sec < duration) beepTick();
+      // 更新计时显示
+      const remaining = Math.ceil(duration - elapsed);
+      el.timer.textContent = remaining + 's';
+    }
+
+    await sleep(50);
+  }
+
+  // 如果因为暂停退出，确保 timer 清空
+  if (s.state !== 'paused') {
+    el.timer.textContent = '';
+  }
+}
+
+function checkMilestone(reps) {
+  if (reps === 20) { milestoneSound(); speak('二十个了，继续加油'); }
+  else if (reps === 40) { milestoneSound(); speak('四十个了，再做十个完成一组'); }
+  else if (reps === 60) { milestoneSound(); speak('六十个了'); }
+  else if (reps === 80) { milestoneSound(); speak('八十个了'); }
+  else if (reps === 100) { celebrate(); speak('一百个完成了，今天做得非常好'); }
+}
+
+function finishSession() {
+  s.state = 'done';
+  cancelLoop = true;
+  el.circle.classList.remove('active');
+  el.glow.classList.remove('on');
+  el.glow.classList.remove('pause-glow');
+
+  s.session++;
+  s.dayTotal += s.reps;
+  saveDay();
+  updateDisplay();
+  setPhase('done');
+
+  if (s.session > 3) {
+    speak('今日三次训练全部完成，休息吧');
+  } else {
+    speak('第' + (['一','二','三'][s.session-2]) + '次训练完成');
+  }
+}
+
+// ════════════════════════════════════════
+//  暂停/继续
+// ════════════════════════════════════════
+function togglePause() {
+  if (s.state === 'active') {
+    s.state = 'paused';
+    el.action.textContent = '继续';
+    el.action.classList.remove('running');
+    el.action.classList.add('paused');
+    el.glow.classList.remove('on');
+    el.glow.classList.add('pause-glow');
+    setPhase('pause');
+    beep(700, 0.15, 0.08);
+    speak('已暂停');
+  } else if (s.state === 'paused') {
+    s.state = 'active';
+    el.action.textContent = '暂停';
+    el.action.classList.remove('paused');
+    el.action.classList.add('running');
+    el.glow.classList.remove('pause-glow');
+    el.glow.classList.add('on');
+    beepRise();
+    speak('继续');
+    // 唤醒倒计时
+    if (pauseResolver) {
+      pauseResolver();
+      pauseResolver = null;
+    }
+  }
+}
+
+// ════════════════════════════════════════
+//  开始训练
+// ════════════════════════════════════════
+async function handleStart() {
+  if (s.state === 'active' || s.state === 'paused') {
+    togglePause();
+    return;
+  }
+
+  if (s.session > 3) {
+    setPhase('done');
+    return;
+  }
+
+  initAudio();
+  if (isIOS) window.speechSynthesis.getVoices();
+  s.reps = 0;
+  s.state = 'active';
+  updateDisplay();
+
+  trainingLoop();
+}
+
+// ════════════════════════════════════════
+//  辅助
+// ════════════════════════════════════════
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ════════════════════════════════════════
+//  事件绑定
+// ════════════════════════════════════════
+el.action.addEventListener('click', handleStart);
+el.action.addEventListener('touchstart', e => {
+  if (e) { e.preventDefault(); handleStart(); }
+}, { passive: false });
+
+// 点击圆也可以暂停/继续
+el.circle.addEventListener('click', () => {
+  if (s.state === 'active' || s.state === 'paused') togglePause();
+  else if (s.state === 'idle' && s.session <= 3) handleStart();
+});
+el.circle.addEventListener('touchstart', e => {
+  if (s.state === 'active' || s.state === 'paused') { e.preventDefault(); togglePause(); }
+  else if (s.state === 'idle' && s.session <= 3) { e.preventDefault(); handleStart(); }
+}, { passive: false });
+
+// 空格键
+document.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    if (s.state === 'active' || s.state === 'paused') togglePause();
+    else if (s.state === 'idle' && s.session <= 3) handleStart();
+  }
+});
+
+// 测试声音
+el.test.addEventListener('click', async () => {
+  if (testing) return; testing = true;
+  el.test.textContent = '测试中';
+  initAudio();
+  beepRise(); await sleep(500);
+  try { await speak('这是测试语音'); } catch(e) {}
+  await sleep(500);
+  el.test.textContent = '测试声音';
+  testing = false;
+});
+el.test.addEventListener('touchstart', e => { e.preventDefault(); if (!testing) el.test.click(); }, { passive: false });
+
+// 重置
+el.reset.addEventListener('click', () => {
+  if (s.state === 'active' || s.state === 'paused') { cancelLoop = true; if (pauseResolver) pauseResolver(); }
+  s.dayTotal = 0; s.session = 1; s.state = 'idle';
+  s.reps = 0; cancelLoop = true;
+  el.action.textContent = '开始训练';
+  el.action.classList.remove('running','paused');
+  el.circle.classList.remove('active');
+  el.glow.classList.remove('on','pause-glow');
+  setPhase('idle');
+  saveDay();
+  updateDisplay();
+});
+
+// ════════════════════════════════════════
+//  初始化
+// ════════════════════════════════════════
+function init() {
+  loadDay();
+  updateDisplay();
+  setPhase('idle');
+  el.reset.style.display = 'block';
+  if (window.speechSynthesis) {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = () => {};
+  }
+}
+init();
+</script>
+</body>
+</html>
