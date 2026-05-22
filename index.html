@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>4-7-8 呼吸引导</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:#0a0d18;min-height:100vh;display:flex;
+    font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+    color:#c8ccda;overflow:hidden;user-select:none;touch-action:none;
+    justify-content:center
+  }
+  /* 容器 - 固定尺寸, 无滚动 */
+  .app{
+    width:100%;max-width:420px;height:100vh;height:100dvh;
+    display:flex;flex-direction:column;
+    padding:48px env(safe-area-inset-right,24px) env(safe-area-inset-bottom,40px) env(safe-area-inset-left,24px);
+    position:relative
+  }
+
+  /* ═══ 顶部：模式标签 ═══ */
+  .pattern-bar{
+    text-align:center;padding-top:20px;padding-bottom:4px;
+    z-index:2;position:relative
+  }
+  .pattern-bar .label{
+    font-size:13px;letter-spacing:4px;color:rgba(255,255,255,.15)
+  }
+
+  /* ═══ 中部：计时器区域 (弹性占据) ═══ */
+  .timer-area{
+    flex:1;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    z-index:1;position:relative;min-height:0
+  }
+
+  /* 大数字环 */
+  .circle-wrap{
+    position:relative;width:210px;height:210px;
+    margin-bottom:10px;flex-shrink:0
+  }
+  .circle-svg{width:100%;height:100%;transform:rotate(-90deg)}
+  .circle-bg{fill:none;stroke:rgba(255,255,255,.04);stroke-width:1.5}
+  .circle-progress{fill:none;stroke:rgba(130,200,160,.2);stroke-width:1.5;stroke-linecap:round;transition:stroke-dashoffset .3s}
+  /* 内圈光晕 (运行时可见) */
+  .circle-glow{fill:none;stroke:rgba(130,200,160,.04);stroke-width:3;filter:blur(6px);opacity:0;transition:opacity 1s}
+  .circle-glow.on{opacity:1}
+
+  .circle-inner{
+    position:absolute;inset:0;display:flex;
+    flex-direction:column;align-items:center;justify-content:center
+  }
+  .circle-number{
+    font-size:64px;font-weight:200;letter-spacing:2px;
+    color:rgba(255,255,255,.25);line-height:1;margin-bottom:4px
+  }
+  .circle-phase{
+    font-size:18px;font-weight:300;letter-spacing:6px;
+    transition:color .5s;color:rgba(255,255,255,.12)
+  }
+  .circle-phase.inhale{color:rgba(140,200,255,.5)}
+  .circle-phase.hold{color:rgba(255,210,120,.5)}
+  .circle-phase.exhale{color:rgba(200,160,255,.5)}
+  .circle-phase.idle{color:rgba(255,255,255,.12)}
+
+  /* ═══ 底部面板 ═══ */
+  .bottom-panel{
+    flex-shrink:0;padding-top:6px;padding-bottom:12px;
+    display:flex;flex-direction:column;align-items:center;gap:0;
+    z-index:2;position:relative
+  }
+
+  /* 进度圆点 */
+  .dot-row{
+    display:flex;justify-content:center;gap:6px;margin-bottom:16px
+  }
+  .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:rgba(255,255,255,.05);transition:all .4s
+  }
+  .dot.active{background:rgba(130,200,160,.35)}
+  .dot.done{background:rgba(130,200,160,.15)}
+
+  /* 操作按钮 - 始终在最上层 */
+  .action-btn-wrap{
+    position:relative;z-index:10;margin-bottom:0
+  }
+  .action-btn{
+    width:52px;height:52px;border-radius:50%;
+    border:1.5px solid rgba(130,200,160,.25);
+    background:rgba(130,200,160,.06);
+    color:rgba(130,200,160,.5);
+    font-size:20px;font-weight:600;letter-spacing:1px;
+    cursor:pointer;transition:all .3s;
+    display:flex;align-items:center;justify-content:center;
+    outline:none;-webkit-tap-highlight-color:transparent;
+    margin:0 auto
+  }
+  .action-btn:active{transform:scale(.92)}
+  .action-btn.running{
+    border-color:rgba(130,200,160,.15);
+    background:transparent;
+    color:rgba(130,200,160,.3);
+    font-size:18px
+  }
+
+  /* 底部小文字 */
+  .sub-row{
+    display:flex;justify-content:center;gap:24px;margin-top:10px
+  }
+  .sub-text{
+    font-size:12px;color:rgba(255,255,255,.12);
+    letter-spacing:1px;cursor:pointer;padding:4px 8px
+  }
+  .sub-text:active{color:rgba(255,255,255,.25)}
+
+  /* ═══ 完成态 ═══ */
+  .done-screen{
+    display:none;flex-direction:column;align-items:center;
+    justify-content:center;height:100%;gap:16px
+  }
+  .done-screen.show{display:flex}
+  .done-icon{font-size:48px;opacity:.5;margin-bottom:4px}
+  .done-title{font-size:18px;color:rgba(255,255,255,.3);font-weight:300;letter-spacing:3px}
+  .done-sub{font-size:13px;color:rgba(255,255,255,.15);line-height:1.8;text-align:center}
+
+  .hidden{display:none}
+
+  @media(min-width:420px){
+    .circle-wrap{width:240px;height:240px}
+    .circle-number{font-size:72px}
+  }
+  @media(max-height:640px){
+    .app{padding-top:28px}
+    .pattern-bar{padding-top:8px}
+    .circle-wrap{width:170px;height:170px}
+    .circle-number{font-size:52px}
+    .circle-phase{font-size:15px}
+    .action-btn{width:44px;height:44px;font-size:17px}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- 顶部：模式标签 -->
+  <div class="pattern-bar">
+    <div class="label">4 · 7 · 8</div>
+  </div>
+
+  <!-- 中部：计时器 -->
+  <div class="timer-area" id="timerArea">
+    <div class="circle-wrap">
+      <svg class="circle-svg" viewBox="0 0 210 210">
+        <circle class="circle-bg" cx="105" cy="105" r="80"/>
+        <circle class="circle-glow" id="glowRing" cx="105" cy="105" r="80"/>
+        <circle class="circle-progress" id="progress" cx="105" cy="105" r="80"
+          stroke-dasharray="502.65" stroke-dashoffset="0"/>
+      </svg>
+      <div class="circle-inner">
+        <div class="circle-number" id="timerNum">--</div>
+        <div class="circle-phase idle" id="phaseLabel">准备</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部面板 -->
+  <div class="bottom-panel" id="mainPanel">
+    <div class="dot-row" id="dotRow">
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+
+    <!-- 操作按钮 - z-index最高 -->
+    <div class="action-btn-wrap">
+      <button class="action-btn" id="actionBtn">开始</button>
+    </div>
+
+    <div class="sub-row">
+      <span class="sub-text" id="testBtn">测试声音</span>
+    </div>
+  </div>
+
+  <!-- 完成画面 -->
+  <div class="done-screen" id="doneScreen">
+    <div class="done-icon">🌙</div>
+    <div class="done-title">呼吸完成</div>
+    <div class="done-sub">身体已经放松下来<br>保持闭眼，自然入睡</div>
+    <button class="action-btn" onclick="resetAll()" style="width:auto;border-radius:24px;padding:0 32px;font-size:14px;margin-top:8px">再来一次</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  4-7-8 呼吸引导 v2
+//  ⚡ 极简界面 · 音效为主 · 适配 iPhone
+// ═══════════════════════════════════════════
+
+const INHALE = 4, HOLD = 7, EXHALE = 8, ROUNDS = 4;
+const CIRCUM = 2 * Math.PI * 80; // 502.65
+const TTS_BASE = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=';
+
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+const s = {
+  running:false, phase:'idle', round:0, phaseElapsed:0, phaseMs:0, cancelled:false
+};
+
+// DOM
+const timerNum = document.getElementById('timerNum');
+const phaseLabel = document.getElementById('phaseLabel');
+const progress = document.getElementById('progress');
+const glowRing = document.getElementById('glowRing');
+const dots = document.querySelectorAll('.dot');
+const actionBtn = document.getElementById('actionBtn');
+const mainPanel = document.getElementById('mainPanel');
+const doneScreen = document.getElementById('doneScreen');
+const testBtn = document.getElementById('testBtn');
+
+// ═══════════════════════════════════
+//  语音
+// ═══════════════════════════════════
+
+let useFallback = false;
+
+async function say(text) {
+  if (s.cancelled) return;
+  if (!useFallback && !isIOS) {
+    try { await playGoogleTTS(text); return; }
+    catch(e) { useFallback = true; }
+  }
+  await playSystemTTS(text);
+}
+
+function playGoogleTTS(text) {
+  return new Promise((resolve, reject) => {
+    const url = TTS_BASE + encodeURIComponent(text);
+    const audio = new Audio(url);
+    const timeout = setTimeout(() => { audio.src = ''; reject('timeout'); }, 5000);
+    audio.oncanplaythrough = () => {
+      clearTimeout(timeout);
+      audio.play().then(() => { audio.onended = () => setTimeout(resolve, 80); }).catch(reject);
+    };
+    audio.onerror = reject;
+    audio.load();
+  });
+}
+
+function playSystemTTS(text) {
+  return new Promise(resolve => {
+    if (s.cancelled) { resolve(); return; }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN'; u.rate = 0.82; u.pitch = 1.0; u.volume = 1;
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      const best = voices.find(v => v.lang.startsWith('zh') && !v.name.includes('Huihui'))
+                 || voices.find(v => v.lang.startsWith('zh'));
+      if (best) u.voice = best;
+    } catch(e) {}
+    u.onend = resolve; u.onerror = resolve;
+    window.speechSynthesis.speak(u);
+  });
+}
+
+// ═══════════════════════════════════
+//  音效
+// ═══════════════════════════════════
+
+let audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function beep(type) {
+  try {
+    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine'; const V = 0.20;
+
+    switch(type) {
+      case 'inhale':
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.linearRampToValueAtTime(620, now + 0.45);
+        gain.gain.setValueAtTime(V, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.45);
+        osc.start(now); osc.stop(now + 0.45); break;
+      case 'hold':
+        osc.frequency.setValueAtTime(270, now);
+        gain.gain.setValueAtTime(V*0.65, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.4);
+        osc.start(now); osc.stop(now + 0.4); break;
+      case 'exhale':
+        osc.frequency.setValueAtTime(500, now);
+        osc.frequency.linearRampToValueAtTime(330, now + 0.55);
+        gain.gain.setValueAtTime(V, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.55);
+        osc.start(now); osc.stop(now + 0.55); break;
+      case 'tick':
+        osc.frequency.setValueAtTime(520, now);
+        gain.gain.setValueAtTime(V*0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.start(now); osc.stop(now + 0.08); break;
+      case 'switch':
+        osc.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(V*0.3, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.15);
+        osc.start(now); osc.stop(now + 0.15); break;
+      case 'done':
+        osc.frequency.setValueAtTime(523, now);
+        osc.frequency.linearRampToValueAtTime(784, now + 0.5);
+        gain.gain.setValueAtTime(V*0.35, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.6);
+        osc.start(now); osc.stop(now + 0.6); break;
+    }
+  } catch(e) {}
+}
+
+function prelude() {
+  try {
+    initAudio(); const ctx = audioCtx; const now = ctx.currentTime;
+    for (let i = 0; i < 3; i++) {
+      const t = now + i * 0.4;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(680 + i*70, t);
+      gain.gain.setValueAtTime(0.15, t);
+      gain.gain.linearRampToValueAtTime(0, t + 0.2);
+      osc.start(t); osc.stop(t + 0.2);
+    }
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════
+//  核心流程
+// ═══════════════════════════════════
+
+async function run() {
+  s.running = true; s.cancelled = false;
+
+  // 按钮 → ...
+  actionBtn.textContent = '•••';
+  actionBtn.classList.add('running');
+
+  // 光晕
+  glowRing.classList.add('on');
+
+  prelude();
+  await sleep(700);
+  if (s.cancelled) return;
+
+  await say('舌尖轻顶上颚，闭上双眼');
+  await sleep(300);
+
+  for (let r = 1; r <= ROUNDS; r++) {
+    if (s.cancelled) return;
+    s.round = r - 1;
+    updateDots();
+
+    // 吸气
+    s.phase = 'inhale'; s.phaseMs = INHALE * 1000; s.phaseElapsed = 0;
+    phaseLabel.textContent = '吸气'; phaseLabel.className = 'circle-phase inhale';
+    beep('switch');
+    await say('吸气');
+    await sleep(150);
+    if (s.cancelled) return;
+    await countdown(INHALE);
+
+    // 屏气
+    s.phase = 'hold'; s.phaseMs = HOLD * 1000; s.phaseElapsed = 0;
+    phaseLabel.textContent = '屏气'; phaseLabel.className = 'circle-phase hold';
+    beep('switch');
+    await say('屏住呼吸');
+    await sleep(100);
+    if (s.cancelled) return;
+    await countdown(HOLD);
+
+    // 呼气
+    s.phase = 'exhale'; s.phaseMs = EXHALE * 1000; s.phaseElapsed = 0;
+    phaseLabel.textContent = '呼气'; phaseLabel.className = 'circle-phase exhale';
+    beep('switch');
+    await say('呼————');
+    await sleep(100);
+    if (s.cancelled) return;
+    await countdown(EXHALE);
+
+    if (r < ROUNDS) await sleep(300);
+  }
+
+  if (!s.cancelled) {
+    beep('done');
+    glowRing.classList.remove('on');
+    await say('四轮完成，晚安');
+    await sleep(600);
+    showDone();
+  }
+}
+
+function countdown(sec) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    function tick() {
+      if (s.cancelled) { resolve(); return; }
+      const elapsed = Date.now() - start;
+      const remain = Math.max(0, Math.ceil((sec * 1000 - elapsed) / 1000));
+      timerNum.textContent = String(remain).padStart(2, '0');
+      progress.style.strokeDashoffset = CIRCUM * (1 - Math.min(elapsed / (sec*1000), 1));
+
+      // 每秒滴声(最后3秒)
+      const curSec = Math.ceil(elapsed / 1000);
+      if (curSec > 0 && curSec <= sec && elapsed - (curSec-1)*1000 < 30) {
+        beep('tick');
+      }
+
+      if (elapsed >= sec * 1000) resolve();
+      else requestAnimationFrame(tick);
+    }
+    tick();
+  });
+}
+
+// ═══════════════════════════════════
+//  UI
+// ═══════════════════════════════════
+
+function updateDots() {
+  dots.forEach((d, i) => {
+    d.className = 'dot';
+    if (i < s.round) d.classList.add('done');
+    else if (i === s.round) d.classList.add('active');
+  });
+}
+
+function showDone() {
+  s.running = false;
+  mainPanel.classList.add('hidden');
+  doneScreen.classList.add('show');
+}
+
+async function resetAll() {
+  s.cancelled = true;
+  window.speechSynthesis.cancel();
+  await sleep(200);
+  s.running = false; s.round = 0; s.phase = 'idle';
+  timerNum.textContent = '--';
+  phaseLabel.textContent = '准备'; phaseLabel.className = 'circle-phase idle';
+  mainPanel.classList.remove('hidden');
+  doneScreen.classList.remove('show');
+  progress.style.strokeDashoffset = CIRCUM;
+  glowRing.classList.remove('on');
+  dots.forEach(d => d.className = 'dot');
+  actionBtn.textContent = '开始';
+  actionBtn.classList.remove('running');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ═══════════════════════════════════
+//  声音测试
+// ═══════════════════════════════════
+
+let testing = false;
+testBtn.addEventListener('click', async function(e) {
+  e.preventDefault();
+  if (testing || s.running) return;
+  testing = true;
+  testBtn.textContent = '测试中…';
+
+  initAudio();
+  prelude();
+  await sleep(900);
+  beep('inhale'); await sleep(400);
+  beep('hold'); await sleep(400);
+  beep('exhale'); await sleep(400);
+  beep('done');
+  await sleep(400);
+
+  if (isIOS) {
+    await playSystemTTS('这是系统语音');
+  } else {
+    try { await playGoogleTTS('这是Google语音'); }
+    catch(e) { await playSystemTTS('这是系统语音'); }
+  }
+
+  testBtn.textContent = '测试完成';
+  setTimeout(() => { testBtn.textContent = '测试声音'; testing = false; }, 2000);
+});
+
+// ═══════════════════════════════════
+//  入口
+// ═══════════════════════════════════
+
+async function handleStart(e) {
+  e.preventDefault();
+  if (s.running) return;
+  initAudio();
+  if (isIOS) window.speechSynthesis.getVoices();
+  await run();
+}
+
+actionBtn.addEventListener('click', handleStart);
+actionBtn.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+
+// 空格键
+document.addEventListener('keydown', e => {
+  if ((e.key === ' ' || e.key === 'Enter') && !s.running) {
+    e.preventDefault(); actionBtn.click();
+  }
+});
+
+// 预加载语音
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => {};
+}
+
+resetAll();
+</script>
+</body>
+</html>
