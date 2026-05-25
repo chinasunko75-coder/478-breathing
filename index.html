@@ -205,7 +205,6 @@
 
 const INHALE = 4, HOLD = 7, EXHALE = 8, ROUNDS = 4;
 const CIRCUM = 2 * Math.PI * 80; // 502.65
-const TTS_BASE = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=';
 
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -226,73 +225,76 @@ const testBtn = document.getElementById('testBtn');
 
 // ═══════════════════════════════════
 //  语音 — 三重兜底
-//  ① 预加载 Google TTS (blob 缓存) 🥇
-//  ② playSystemTTS（超时保护）    🥈
-//  ③ 静默通过（文字显示）         🥉
+//  🥇 百度翻译 TTS (国内可用, MP3, <audio>直连不依赖CORS)
+//  🥈 Google TTS (境外备用)
+//  🥉 speechSynthesis + 超时 (永远不卡流程)
 // ═══════════════════════════════════
 
-const TTS_CACHE = new Map();
-const TTS_PHRASES = [
-  '舌尖轻顶上颚，闭上双眼',
-  '吸气',
-  '屏住呼吸',
-  '呼————',
-  '四轮完成，晚安',
-  '这是系统语音',
-  '这是Google语音'
+const TTS_PROVIDERS = [
+  // 百度翻译 (国内可用, mp3, 直接 Audio URL 无需 CORS)
+  (text) => 'https://fanyi.baidu.com/gettts?lan=zh&text=' + encodeURIComponent(text) + '&spd=5&source=web',
+  // Google (境外)
+  (text) => 'https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=' + encodeURIComponent(text),
 ];
 
-// 在用户手势内预加载所有 TTS 音频（fetch → blob → 缓存）
-async function warmTTS() {
-  const jobs = TTS_PHRASES.map(async text => {
-    try {
-      const url = TTS_BASE + encodeURIComponent(text);
-      const resp = await fetch(url, { cache: 'force-cache' });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const blob = await resp.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      TTS_CACHE.set(text, blobUrl);
-    } catch(e) {
-      // 预热失败不阻塞，运行时会 fallback
-    }
-  });
-  await Promise.allSettled(jobs);
-}
+// 用过的 URL 缓存，避免反复创建 Audio 对象
+const TTS_CACHE = new Map();
 
 async function say(text) {
   if (s.cancelled) return;
 
-  // 🥇 优先：从 blob 缓存播放（最可靠，无需用户手势上下文）
-  const cached = TTS_CACHE.get(text);
-  if (cached) {
-    await playAudioBlob(cached);
-    return;
+  // 🥇🥈 依次尝试各 TTS 提供商：<audio> 直连播放
+  for (let i = 0; i < TTS_PROVIDERS.length; i++) {
+    const buildUrl = TTS_PROVIDERS[i];
+    const url = buildUrl(text);
+    if (await tryPlayTTS(url)) return;
   }
 
-  // 🥈 实时 fetch Google TTS → blob → 播放
-  try {
-    const url = TTS_BASE + encodeURIComponent(text);
-    const resp = await fetch(url);
-    if (resp.ok) {
-      const blob = await resp.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      TTS_CACHE.set(text, blobUrl);
-      await playAudioBlob(blobUrl);
-      return;
-    }
-  } catch(e) {}
-
-  // 🥉 最后手段：系统 speechSynthesis（加超时不会卡死）
+  // 🥉 speechSynthesis 兜底 (超时保护, 不卡流程)
   await playSystemTTS(text);
 }
 
-function playAudioBlob(blobUrl) {
+function tryPlayTTS(url) {
   return new Promise(resolve => {
-    const audio = new Audio(blobUrl);
-    const timer = setTimeout(resolve, 3000);
-    audio.onended = () => { clearTimeout(timer); setTimeout(resolve, 80); };
-    audio.onerror = () => { clearTimeout(timer); resolve(); };
-    audio.play().catch(() => { clearTimeout(timer); resolve(); });
+    const audio = new Audio(url);
+    const timer = setTimeout(() => {
+      audio.src = '';
+      resolve(false);
+    }, 3000);
+    audio.onended = () => {
+      clearTimeout(timer);
+      setTimeout(() => resolve(true), 80);
+    };
+    audio.onerror = () => {
+      clearTimeout(timer);
+      resolve(false);
+    };
+    audio.play().then(() => {
+      // 播放成功但 onended 可能不触发，超时会兜底
+    }).catch(() => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
+}
+
+function playSystemTTS(text) {
+  return new Promise(resolve => {
+    if (s.cancelled) { resolve(); return; }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN'; u.rate = 0.82; u.pitch = 1.0; u.volume = 1;
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      const best = voices.find(v => v.lang.startsWith('zh') && !v.name.includes('Huihui'))
+                 || voices.find(v => v.lang.startsWith('zh'));
+      if (best) u.voice = best;
+    } catch(e) {}
+    let settled = false;
+    const fallbackTimer = setTimeout(() => { if (!settled) { settled = true; resolve(); } }, isIOS ? 1200 : 3000);
+    u.onend = () => { if (!settled) { settled = true; clearTimeout(fallbackTimer); resolve(); } };
+    u.onerror = () => { if (!settled) { settled = true; clearTimeout(fallbackTimer); resolve(); } };
+    window.speechSynthesis.speak(u);
   });
 }
 
@@ -518,7 +520,6 @@ testBtn.addEventListener('click', async function(e) {
 
   initSounds();
   prelude();
-  warmTTS();
   await sleep(900);
   beep('inhale'); await sleep(400);
   beep('hold'); await sleep(400);
@@ -540,10 +541,9 @@ function handleStart(e) {
   if (e) e.preventDefault();
   if (s.running) return;
 
-  // 预热音效 + 前奏 + TTS 缓存 — 全部在用户手势内完成
+  // 预热音效 + 前奏 — 全部在用户手势内完成
   initSounds();
   prelude();
-  warmTTS(); // 不 await，后台开始预加载所有 TTS 音频
 
   run();
 }
