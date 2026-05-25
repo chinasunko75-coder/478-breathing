@@ -255,18 +255,28 @@ function milestoneSound() {
 }
 
 // ════════════════════════════════════════
-//  语音（简化版，兼容 iOS）
+//  语音（多源兜底，<audio> 直连播放）
 // ════════════════════════════════════════
-function playGoogleTTS(text) {
+const TTS_PROVIDERS = [
+  function(text) { return 'https://fanyi.baidu.com/gettts?lan=zh&text=' + encodeURIComponent(text) + '&spd=5&source=web'; },
+  function(text) { return 'https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=' + encodeURIComponent(text); },
+];
+
+function playTTS(text) {
   return new Promise(function(resolve) {
-    var audio = new Audio();
-    audio.src = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=' + encodeURIComponent(text);
-    var done = false;
-    var finish = function() { if (!done) { done = true; resolve(); } };
-    audio.onended = finish;
-    audio.onerror = finish;
-    audio.play().catch(finish);
-    setTimeout(finish, 4000);
+    var urls = TTS_PROVIDERS.map(function(fn) { return fn(text); });
+    var tried = 0;
+    function tryNext() {
+      if (tried >= urls.length) { resolve(); return; }
+      var audio = new Audio(urls[tried++]);
+      var done = false;
+      var finish = function() { if (!done) { done = true; resolve(); } };
+      audio.onended = finish;
+      audio.onerror = function() { if (!done) { done = true; tryNext(); } };
+      audio.play().catch(function() { if (!done) { done = true; tryNext(); } });
+      setTimeout(function() { if (!done) { done = true; resolve(); } }, 3000);
+    }
+    tryNext();
   });
 }
 
@@ -276,14 +286,12 @@ function playSystemTTS(text) {
     window.speechSynthesis.cancel();
     var u = new SpeechSynthesisUtterance(text);
     u.lang = 'zh-CN'; u.rate = 0.88; u.volume = 0.8;
-    // iOS 上不用指定语音，用系统默认
     var done = false;
     var finish = function() { if (!done) { done = true; resolve(); } };
     u.onend = finish;
     u.onerror = finish;
     window.speechSynthesis.speak(u);
-    // 超时保护：防止 iOS SpeechSynthesis 卡死
-    setTimeout(finish, 3000);
+    setTimeout(finish, isIOS ? 1200 : 3000);
   });
 }
 
@@ -294,9 +302,12 @@ async function speak(text) {
   lastSpeakTime = Date.now();
   isSpeaking = true;
   try {
-    if (isIOS) { await playSystemTTS(text); }
-    else { try { await playGoogleTTS(text); } catch(e) { await playSystemTTS(text); } }
-  } catch(e) {}
+    // 🥇 <audio> 直连百度翻译 / Google TTS
+    await playTTS(text);
+  } catch(e) {
+    // 🥈 speechSynthesis 兜底
+    try { await playSystemTTS(text); } catch(e) {}
+  }
   isSpeaking = false;
 }
 
@@ -656,7 +667,7 @@ el.test.addEventListener('click', async () => {
   if (touchHandled) { touchHandled = false; return; }
   if (testing) return; testing = true;
   el.test.textContent = '测试中';
-  initAudio();
+  initSounds();
   beepRise(); await sleep(500);
   try { await speak('这是测试语音'); } catch(e) {}
   await sleep(500);
@@ -668,7 +679,7 @@ el.test.addEventListener('touchstart', async function(e) {
   e.preventDefault();
   if (testing) return; testing = true;
   el.test.textContent = '测试中';
-  initAudio();
+  initSounds();
   beepRise(); await sleep(500);
   try { await speak('这是测试语音'); } catch(e) {}
   await sleep(500);
