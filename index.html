@@ -225,31 +225,74 @@ const doneScreen = document.getElementById('doneScreen');
 const testBtn = document.getElementById('testBtn');
 
 // ═══════════════════════════════════
-//  语音
+//  语音 — 三重兜底
+//  ① 预加载 Google TTS (blob 缓存) 🥇
+//  ② playSystemTTS（超时保护）    🥈
+//  ③ 静默通过（文字显示）         🥉
 // ═══════════════════════════════════
 
-let useFallback = false;
+const TTS_CACHE = new Map();
+const TTS_PHRASES = [
+  '舌尖轻顶上颚，闭上双眼',
+  '吸气',
+  '屏住呼吸',
+  '呼————',
+  '四轮完成，晚安',
+  '这是系统语音',
+  '这是Google语音'
+];
+
+// 在用户手势内预加载所有 TTS 音频（fetch → blob → 缓存）
+async function warmTTS() {
+  const jobs = TTS_PHRASES.map(async text => {
+    try {
+      const url = TTS_BASE + encodeURIComponent(text);
+      const resp = await fetch(url, { cache: 'force-cache' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      TTS_CACHE.set(text, blobUrl);
+    } catch(e) {
+      // 预热失败不阻塞，运行时会 fallback
+    }
+  });
+  await Promise.allSettled(jobs);
+}
 
 async function say(text) {
   if (s.cancelled) return;
-  if (!useFallback && !isIOS) {
-    try { await playGoogleTTS(text); return; }
-    catch(e) { useFallback = true; }
+
+  // 🥇 优先：从 blob 缓存播放（最可靠，无需用户手势上下文）
+  const cached = TTS_CACHE.get(text);
+  if (cached) {
+    await playAudioBlob(cached);
+    return;
   }
+
+  // 🥈 实时 fetch Google TTS → blob → 播放
+  try {
+    const url = TTS_BASE + encodeURIComponent(text);
+    const resp = await fetch(url);
+    if (resp.ok) {
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      TTS_CACHE.set(text, blobUrl);
+      await playAudioBlob(blobUrl);
+      return;
+    }
+  } catch(e) {}
+
+  // 🥉 最后手段：系统 speechSynthesis（加超时不会卡死）
   await playSystemTTS(text);
 }
 
-function playGoogleTTS(text) {
-  return new Promise((resolve, reject) => {
-    const url = TTS_BASE + encodeURIComponent(text);
-    const audio = new Audio(url);
-    const timeout = setTimeout(() => { audio.src = ''; reject('timeout'); }, 5000);
-    audio.oncanplaythrough = () => {
-      clearTimeout(timeout);
-      audio.play().then(() => { audio.onended = () => setTimeout(resolve, 80); }).catch(reject);
-    };
-    audio.onerror = reject;
-    audio.load();
+function playAudioBlob(blobUrl) {
+  return new Promise(resolve => {
+    const audio = new Audio(blobUrl);
+    const timer = setTimeout(resolve, 3000);
+    audio.onended = () => { clearTimeout(timer); setTimeout(resolve, 80); };
+    audio.onerror = () => { clearTimeout(timer); resolve(); };
+    audio.play().catch(() => { clearTimeout(timer); resolve(); });
   });
 }
 
@@ -265,11 +308,11 @@ function playSystemTTS(text) {
                  || voices.find(v => v.lang.startsWith('zh'));
       if (best) u.voice = best;
     } catch(e) {}
-    // iOS 经典 Bug：异步上下文的 speak() 可能永远不触发 onend/onerror
     let settled = false;
-    const fallbackTimer = setTimeout(() => { if (!settled) { settled = true; resolve(); } }, isIOS ? 1200 : 3000);
-    u.onend = () => { if (!settled) { settled = true; clearTimeout(fallbackTimer); resolve(); } };
-    u.onerror = () => { if (!settled) { settled = true; clearTimeout(fallbackTimer); resolve(); } };
+    const done = () => { if (!settled) { settled = true; clearTimeout(fallbackTimer); resolve(); } };
+    const fallbackTimer = setTimeout(done, isIOS ? 1200 : 3000);
+    u.onend = done;
+    u.onerror = done;
     window.speechSynthesis.speak(u);
   });
 }
@@ -475,6 +518,7 @@ testBtn.addEventListener('click', async function(e) {
 
   initSounds();
   prelude();
+  warmTTS();
   await sleep(900);
   beep('inhale'); await sleep(400);
   beep('hold'); await sleep(400);
@@ -482,12 +526,7 @@ testBtn.addEventListener('click', async function(e) {
   beep('done');
   await sleep(400);
 
-  if (isIOS) {
-    await playSystemTTS('这是系统语音');
-  } else {
-    try { await playGoogleTTS('这是Google语音'); }
-    catch(e) { await playSystemTTS('这是系统语音'); }
-  }
+  await say('这是系统语音');
 
   testBtn.textContent = '测试完成';
   setTimeout(() => { testBtn.textContent = '测试声音'; testing = false; }, 2000);
@@ -501,9 +540,10 @@ function handleStart(e) {
   if (e) e.preventDefault();
   if (s.running) return;
 
-  // 预热音效 + 前奏 — 放用户手势内，iOS 才能发声
+  // 预热音效 + 前奏 + TTS 缓存 — 全部在用户手势内完成
   initSounds();
   prelude();
+  warmTTS(); // 不 await，后台开始预加载所有 TTS 音频
 
   run();
 }
