@@ -265,7 +265,11 @@ function playSystemTTS(text) {
                  || voices.find(v => v.lang.startsWith('zh'));
       if (best) u.voice = best;
     } catch(e) {}
-    u.onend = resolve; u.onerror = resolve;
+    // iOS 经典 Bug：异步上下文的 speak() 可能永远不触发 onend/onerror
+    let settled = false;
+    const fallbackTimer = setTimeout(() => { if (!settled) { settled = true; resolve(); } }, isIOS ? 1200 : 3000);
+    u.onend = () => { if (!settled) { settled = true; clearTimeout(fallbackTimer); resolve(); } };
+    u.onerror = () => { if (!settled) { settled = true; clearTimeout(fallbackTimer); resolve(); } };
     window.speechSynthesis.speak(u);
   });
 }
@@ -497,12 +501,9 @@ function handleStart(e) {
   if (e) e.preventDefault();
   if (s.running) return;
 
-  // 预热音效
+  // 预热音效 + 前奏 — 放用户手势内，iOS 才能发声
   initSounds();
-
-  // 先发一个确认音效
-  beep('inhale');
-  setTimeout(() => beep('hold'), 200);
+  prelude();
 
   run();
 }
