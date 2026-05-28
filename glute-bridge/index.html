@@ -106,7 +106,22 @@ const VOICES = {
 function playVoice(key) {
   return new Promise(function(resolve) {
     var url = VOICES[key];
-    if (!url) { setTimeout(resolve, 100); return; }
+    if (!url) {
+      // 无 base64 音频时用 speechSynthesis 回退
+      var textMap = {hold:'保持', rest:'休息', resume:'继续'};
+      var text = textMap[key] || key;
+      if (window.speechSynthesis) {
+        var u = new SpeechSynthesisUtterance(text);
+        u.lang = 'zh-CN'; u.rate = 0.9; u.volume = 1;
+        u.onend = resolve;
+        u.onerror = function() { setTimeout(resolve, 200); };
+        speechSynthesis.speak(u);
+        setTimeout(resolve, 4000);
+      } else {
+        setTimeout(resolve, 100);
+      }
+      return;
+    }
     var audio = new Audio(url);
     var done = false;
     var finish = function() { if (!done) { done = true; resolve(); } };
@@ -325,6 +340,7 @@ async function trainingLoop() {
     currentPhaseKey = 'hold';
     if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
     setPhase('hold', '');
+    await playVoice('hold');
     await countdownWithPause(PHASES.hold.dur, 0.8);
     if (cancelLoop) break;
     if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
@@ -341,6 +357,7 @@ async function trainingLoop() {
     currentPhaseKey = 'rest';
     if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
     setPhase('rest', '');
+    await playVoice('rest');
     await countdownWithPause(PHASES.rest.dur, 0.8);
     if (cancelLoop) break;
 
@@ -485,8 +502,10 @@ el.test.addEventListener('click', async () => {
   warmAudio();
   playSound(SOUNDS.beepTick);
   await sleep(300);
-  beepRise(); await sleep(500);
-  await playVoice('lift');
+  beepRise(); await playVoice('lift'); await sleep(300);
+  await playVoice('hold'); await sleep(300);
+  beepFall(); await playVoice('lower'); await sleep(300);
+  await playVoice('rest');
   await sleep(500);
   el.test.textContent = '测试声音';
   testing = false;
@@ -499,8 +518,10 @@ el.test.addEventListener('touchstart', async function(e) {
   warmAudio();
   playSound(SOUNDS.beepTick);
   await sleep(300);
-  beepRise(); await sleep(500);
-  await playVoice('lift');
+  beepRise(); await playVoice('lift'); await sleep(300);
+  await playVoice('hold'); await sleep(300);
+  beepFall(); await playVoice('lower'); await sleep(300);
+  await playVoice('rest');
   await sleep(500);
   el.test.textContent = '测试声音';
   testing = false;
