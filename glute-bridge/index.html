@@ -110,11 +110,24 @@ function playVoice(key) {
     var audio = new Audio(url);
     var done = false;
     var finish = function() { if (!done) { done = true; resolve(); } };
+    var tryFallback = function() {
+      if (done) return;
+      // base64 播放失败时用 speechSynthesis 保底
+      var textMap = {lift:'抬起', hold:'保持', lower:'放下', rest:'休息', resume:'继续'};
+      var text = textMap[key] || key;
+      if (window.speechSynthesis) {
+        var u = new SpeechSynthesisUtterance(text);
+        u.lang = 'zh-CN'; u.rate = 0.9; u.volume = 1;
+        u.onend = finish; u.onerror = finish;
+        speechSynthesis.speak(u);
+        setTimeout(finish, 4000);
+      } else {
+        finish();
+      }
+    };
     audio.onended = finish;
-    audio.onerror = finish;
-    audio.play().catch(function() {
-      if (!done) { done = true; setTimeout(resolve, 200); }
-    });
+    audio.onerror = tryFallback;
+    audio.play().catch(tryFallback);
     setTimeout(finish, 6000);
   });
 }
