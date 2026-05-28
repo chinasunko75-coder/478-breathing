@@ -106,22 +106,7 @@ const VOICES = {
 function playVoice(key) {
   return new Promise(function(resolve) {
     var url = VOICES[key];
-    if (!url) {
-      // 无 base64 音频时用 speechSynthesis 回退
-      var textMap = {hold:'保持', rest:'休息', resume:'继续'};
-      var text = textMap[key] || key;
-      if (window.speechSynthesis) {
-        var u = new SpeechSynthesisUtterance(text);
-        u.lang = 'zh-CN'; u.rate = 0.9; u.volume = 1;
-        u.onend = resolve;
-        u.onerror = function() { setTimeout(resolve, 200); };
-        speechSynthesis.speak(u);
-        setTimeout(resolve, 4000);
-      } else {
-        setTimeout(resolve, 100);
-      }
-      return;
-    }
+    if (!url) { setTimeout(resolve, 100); return; }
     var audio = new Audio(url);
     var done = false;
     var finish = function() { if (!done) { done = true; resolve(); } };
@@ -132,6 +117,32 @@ function playVoice(key) {
     });
     setTimeout(finish, 6000);
   });
+}
+
+// 生成不同音调的提示音作为 hold/rest 阶段 cue
+function initPhaseSounds() {
+  if (VOICES.hold && VOICES.rest) return; // 已初始化
+  var bl = function(freq, dur, vol) {
+    var sr = 44100, n = Math.floor(sr * dur), len = sr * dur;
+    var buf = new ArrayBuffer(44 + n * 2);
+    var v = new DataView(buf);
+    function w(s, o) { for (var i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); }
+    w('RIFF', 0); v.setUint32(4, 44 + n * 2 - 8, true);
+    w('WAVE', 8); w('fmt ', 12); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    w('data', 36); v.setUint32(40, n * 2, true);
+    for (var i = 0; i < n; i++) {
+      var sample = Math.sin(2 * Math.PI * freq * i / sr);
+      sample *= vol * 0.8;
+      if (i > n * 0.7) sample *= 1 - ((i - n * 0.7) / (n * 0.3)); // fade out
+      v.setInt16(44 + i * 2, sample * 32767, true);
+    }
+    return URL.createObjectURL(new Blob([buf], {type:'audio/wav'}));
+  };
+  VOICES.hold = bl(440, 0.25, 0.3);   // 中音A 用于"保持"
+  VOICES.rest = bl(330, 0.35, 0.25);  // 低音E 用于"休息"
 }
 
 // 预热音频通道
@@ -246,6 +257,7 @@ function initSounds() {
   SOUNDS.milestone1 = makeBeepURI(500, 0.10, 0.12);
   SOUNDS.milestone2 = makeBeepURI(700, 0.10, 0.12);
   SOUNDS.milestone3 = makeBeepURI(900, 0.10, 0.12);
+  initPhaseSounds();
 }
 function playSound(uri) { try { var a = new Audio(uri); a.volume = 1.0; a.play().catch(function(){}); } catch(e) {} }
 function beepRise() { playSound(SOUNDS.beepRise); }
