@@ -5,9 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#1c1c1a">
+<meta name="theme-color" content="#f7f6f2">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>高位臀桥训练</title>
+<meta name="apple-mobile-web-app-title" content="高位臀桥">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<title>高位臀桥</title>
 <style>
   :root{
     --bg:#f7f6f2; --bg-elev:#efeee9; --bg-subtle:#e6e4dc; --ink:#1c1c1a; --ink-2:#4a4a46;
@@ -21,7 +25,7 @@
     font-family:var(--font);user-select:none;-webkit-user-select:none;-webkit-font-smoothing:antialiased}
   .container{
     width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
-    padding:max(12px,env(safe-area-inset-top)) 24px max(28px,env(safe-area-inset-bottom));position:relative;
+    padding:max(12px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(28px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));position:relative;
   }
   .header{text-align:center;padding-top:10px}
   .header .kicker{
@@ -119,6 +123,22 @@
 // ════════════════════════════════════════════
 //  高位臀桥 v3 — 嵌入式语音
 // ════════════════════════════════════════════
+
+
+// ── iOS / PWA: keep screen awake during session ──
+let wakeLockSentinel = null;
+async function requestWakeLock() {
+  try {
+    if (!('wakeLock' in navigator)) return;
+    wakeLockSentinel = await navigator.wakeLock.request('screen');
+    wakeLockSentinel.addEventListener('release', () => { wakeLockSentinel = null; });
+  } catch (e) {}
+}
+async function releaseWakeLock() {
+  try {
+    if (wakeLockSentinel) { await wakeLockSentinel.release(); wakeLockSentinel = null; }
+  } catch (e) {}
+}
 
 const STORAGE_KEY = 'glute_bridge_day';
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -389,6 +409,7 @@ function celebrate() {
 async function trainingLoop() {
   cancelLoop = false;
   s.state = 'active';
+  requestWakeLock();
   el.circle.classList.add('active');
   el.glow.classList.add('on');
   el.glow.classList.remove('pause-glow');
@@ -506,6 +527,7 @@ function checkMilestone(reps) {
 function finishSession() {
   s.state = 'done';
   cancelLoop = true;
+  releaseWakeLock();
   el.circle.classList.remove('active');
   el.glow.classList.remove('on');
   el.glow.classList.remove('pause-glow');
@@ -535,6 +557,7 @@ function togglePause() {
     playVoice('pause');
   } else if (s.state === 'paused') {
     s.state = 'active';
+    requestWakeLock();
     if (currentPhaseKey) { setPhase(currentPhaseKey, ''); }
     else { el.phase.textContent = '继续训练'; el.phase.className = 'phase'; }
     el.timer.textContent = '';
@@ -620,6 +643,7 @@ el.test.addEventListener('touchstart', async function(e) {
 }, { passive: false });
 
 el.reset.addEventListener('click', () => {
+  releaseWakeLock();
   const wasRunning = s.state === 'active' || s.state === 'paused';
   if (wasRunning) {
     discardSession = true;
@@ -637,6 +661,15 @@ el.reset.addEventListener('click', () => {
 });
 
 // ── 初始化 ──
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    releaseWakeLock();
+    if (s.state === 'active') togglePause();
+  } else if (s.state === 'active') {
+    requestWakeLock();
+  }
+});
+
 function init() {
   initSounds();
   loadDay();
