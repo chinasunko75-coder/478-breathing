@@ -3,65 +3,110 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1c1c1a">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>4-7-8 呼吸引导</title>
 <style>
+  :root{
+    --bg:#f7f6f2; --bg-elev:#efeee9; --ink:#1c1c1a; --ink-2:#4a4a46;
+    --ink-muted:#8a8983; --mid:#b5b3ab; --hairline:rgba(28,28,26,.09);
+    --font:'PingFang SC','Source Han Serif SC','Noto Serif SC','Songti SC',Georgia,serif;
+    --font-en:Georgia,'Times New Roman',serif;
+    --font-label:-apple-system,'Segoe UI',system-ui,sans-serif;
+  }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
   body{
-    background:#0a0d18;min-height:100vh;display:flex;
-    font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
-    color:#c8ccda;overflow:hidden;user-select:none;touch-action:none;
-    justify-content:center
+    background:var(--bg);min-height:100vh;display:flex;
+    font-family:var(--font);color:var(--ink);overflow:hidden;user-select:none;touch-action:manipulation;
+    justify-content:center;-webkit-font-smoothing:antialiased;
   }
   .app{
     width:100%;max-width:420px;height:100vh;height:100dvh;
     display:flex;flex-direction:column;
-    padding:48px env(safe-area-inset-right,24px) env(safe-area-inset-bottom,40px) env(safe-area-inset-left,24px);
-    position:relative
+    padding:max(40px,env(safe-area-inset-top)) env(safe-area-inset-right,24px) max(28px,env(safe-area-inset-bottom)) env(safe-area-inset-left,24px);
+    position:relative;
   }
-  .pattern-bar{text-align:center;padding-top:20px;padding-bottom:4px;z-index:2;position:relative}
-  .pattern-bar .label{font-size:13px;letter-spacing:4px;color:rgba(255,255,255,.15)}
+  .pattern-bar{text-align:center;padding-top:8px;padding-bottom:4px;z-index:2;position:relative}
+  .pattern-bar .label{
+    font-family:var(--font-label);font-size:11px;font-weight:600;
+    letter-spacing:.28em;text-transform:uppercase;color:var(--ink-muted);
+  }
+  .hero-title{
+    margin-top:10px;font-size:22px;font-weight:600;letter-spacing:.04em;text-align:center;
+  }
+  .hero-sub{
+    margin-top:8px;font-family:var(--font-en);font-size:14px;font-style:italic;
+    color:var(--ink-2);text-align:center;
+  }
   .timer-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;position:relative;min-height:0}
-  .circle-wrap{position:relative;width:210px;height:210px;margin-bottom:10px;flex-shrink:0}
+  .circle-wrap{position:relative;width:min(220px,58vw);height:min(220px,58vw);margin-bottom:10px;flex-shrink:0}
   .circle-svg{width:100%;height:100%;transform:rotate(-90deg)}
-  .circle-bg{fill:none;stroke:rgba(255,255,255,.04);stroke-width:1.5}
-  .circle-progress{fill:none;stroke:rgba(130,200,160,.2);stroke-width:1.5;stroke-linecap:round;transition:stroke-dashoffset .3s}
-  .circle-glow{fill:none;stroke:rgba(130,200,160,.04);stroke-width:3;filter:blur(6px);opacity:0;transition:opacity 1s}
+  .circle-bg{fill:none;stroke:rgba(28,28,26,.08);stroke-width:1.5}
+  .circle-progress{fill:none;stroke:rgba(28,28,26,.35);stroke-width:1.5;stroke-linecap:round;transition:stroke-dashoffset .3s}
+  .circle-glow{fill:none;stroke:rgba(28,28,26,.06);stroke-width:3;filter:blur(4px);opacity:0;transition:opacity 1s}
   .circle-glow.on{opacity:1}
   .circle-inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .circle-number{font-size:64px;font-weight:200;letter-spacing:2px;color:rgba(255,255,255,.25);line-height:1;margin-bottom:4px}
-  .circle-phase{font-size:18px;font-weight:300;letter-spacing:6px;transition:color .5s;color:rgba(255,255,255,.12)}
-  .circle-phase.inhale{color:rgba(140,200,255,.5)}
-  .circle-phase.hold{color:rgba(255,210,120,.5)}
-  .circle-phase.exhale{color:rgba(200,160,255,.5)}
-  .circle-phase.idle{color:rgba(255,255,255,.12)}
-  .bottom-panel{flex-shrink:0;padding-top:6px;padding-bottom:12px;display:flex;flex-direction:column;align-items:center;gap:0;z-index:2;position:relative}
-  .dot-row{display:flex;justify-content:center;gap:6px;margin-bottom:16px}
-  .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.05);transition:all .4s}
-  .dot.active{background:rgba(130,200,160,.35)}
-  .dot.done{background:rgba(130,200,160,.15)}
-  .action-btn-wrap{position:relative;z-index:10;margin-bottom:0}
-  .action-btn{width:52px;height:52px;border-radius:50%;border:1.5px solid rgba(130,200,160,.25);background:rgba(130,200,160,.06);color:rgba(130,200,160,.5);font-size:20px;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all .3s;display:flex;align-items:center;justify-content:center;outline:none;-webkit-tap-highlight-color:transparent;margin:0 auto}
-  .action-btn:active{transform:scale(.92)}
-  .action-btn.running{border-color:rgba(130,200,160,.15);background:transparent;color:rgba(130,200,160,.3);font-size:18px}
-  .sub-row{display:flex;justify-content:center;gap:24px;margin-top:10px}
-  .sub-text{font-size:12px;color:rgba(255,255,255,.12);letter-spacing:1px;cursor:pointer;padding:4px 8px}
-  .sub-text:active{color:rgba(255,255,255,.25)}
-  .done-screen{display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px}
+  .circle-number{
+    font-family:var(--font-en);font-size:56px;font-weight:600;letter-spacing:-.02em;
+    color:var(--ink);line-height:1;margin-bottom:6px;font-variant-numeric:tabular-nums;
+  }
+  .circle-phase{
+    font-size:14px;font-weight:500;letter-spacing:.18em;transition:color .4s;color:var(--ink-muted);
+  }
+  .circle-phase.inhale{color:var(--ink)}
+  .circle-phase.hold{color:#a67c52}
+  .circle-phase.exhale{color:var(--ink-2)}
+  .circle-phase.idle{color:var(--ink-muted)}
+  .bottom-panel{flex-shrink:0;padding-top:6px;padding-bottom:8px;display:flex;flex-direction:column;align-items:center;gap:0;z-index:2}
+  .dot-row{display:flex;justify-content:center;gap:8px;margin-bottom:18px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--bg-subtle,#e6e4dc);transition:all .35s}
+  .dot.active{background:var(--ink)}
+  .dot.done{background:var(--mid)}
+  .action-btn-wrap{position:relative;z-index:10;width:100%;max-width:260px}
+  .action-btn{
+    width:100%;padding:13px 18px;border-radius:999px;border:none;cursor:pointer;
+    background:var(--ink);color:var(--bg);font-family:var(--font);
+    font-size:16px;font-weight:600;letter-spacing:.14em;
+    transition:opacity .18s,transform .12s;outline:none;
+  }
+  .action-btn:active{transform:scale(.985)}
+  .action-btn.running{
+    background:transparent;border:1px solid var(--hairline);color:var(--ink);letter-spacing:.2em;
+  }
+  .action-btn.paused{
+    background:transparent;border:1px solid rgba(166,124,82,.35);color:#a67c52;letter-spacing:.14em;
+  }
+  .sub-row{display:flex;justify-content:center;gap:24px;margin-top:14px}
+  .sub-text{
+    font-family:var(--font-label);font-size:12px;color:var(--ink-muted);
+    letter-spacing:.08em;cursor:pointer;padding:6px 10px;background:none;border:none;
+  }
+  .sub-text:active{color:var(--ink-2)}
+  .done-screen{display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;padding:24px}
   .done-screen.show{display:flex}
-  .done-icon{font-size:48px;opacity:.5;margin-bottom:4px}
-  .done-title{font-size:18px;color:rgba(255,255,255,.3);font-weight:300;letter-spacing:3px}
-  .done-sub{font-size:13px;color:rgba(255,255,255,.15);line-height:1.8;text-align:center}
-  .hidden{display:none}
-  @media(min-width:420px){.circle-wrap{width:240px;height:240px}.circle-number{font-size:72px}}
-  @media(max-height:640px){.app{padding-top:28px}.pattern-bar{padding-top:8px}.circle-wrap{width:170px;height:170px}.circle-number{font-size:52px}.circle-phase{font-size:15px}.action-btn{width:44px;height:44px;font-size:17px}}
+  .done-icon{display:none}
+  .done-title{font-size:26px;color:var(--ink);font-weight:500;letter-spacing:.08em}
+  .done-sub{font-size:14px;color:var(--ink-2);line-height:1.7;text-align:center;font-family:var(--font-en);font-style:italic}
+  .hidden{display:none!important}
+  @media(max-height:640px){
+    .app{padding-top:24px}
+    .circle-wrap{width:170px;height:170px}
+    .circle-number{font-size:44px}
+    .hero-title{font-size:18px}
+  }
+
 </style>
 </head>
 <body>
 <div class="app" id="app">
-  <div class="pattern-bar"><div class="label">4 · 7 · 8</div></div>
+  <div class="pattern-bar">
+    <div class="label">4 · 7 · 8 Breathing</div>
+    <div class="hero-title">4-7-8 呼吸</div>
+    <div class="hero-sub">Calm down in four rounds</div>
+  </div>
   <div class="timer-area" id="timerArea">
     <div class="circle-wrap">
       <svg class="circle-svg" viewBox="0 0 210 210">
@@ -81,9 +126,9 @@
     <div class="sub-row"><span class="sub-text" id="testBtn">测试声音</span></div>
   </div>
   <div class="done-screen" id="doneScreen">
-    <div class="done-icon">🌙</div>
+    <div class="done-icon"></div>
     <div class="done-title">呼吸完成</div>
-    <div class="done-sub">身体已经放松下来<br>保持闭眼，自然入睡</div>
+    <div class="done-sub">身体已经放松下来<br>可以闭眼休息一会儿</div>
     <button class="action-btn" onclick="resetAll()" style="width:auto;border-radius:24px;padding:0 32px;font-size:14px;margin-top:8px">再来一次</button>
   </div>
 </div>
@@ -148,7 +193,7 @@ function playVoice(key) {
 }
 
 const s = {
-  running:false, phase:'idle', round:0, phaseElapsed:0, phaseMs:0, cancelled:false
+  running:false, paused:false, phase:'idle', round:0, phaseElapsed:0, phaseMs:0, cancelled:false
 };
 
 const timerNum = document.getElementById('timerNum');
@@ -215,8 +260,10 @@ function prelude() {
 // ── 核心流程 ──
 async function run() {
   s.running = true; s.cancelled = false;
-  actionBtn.textContent = '•••';
+  s.paused = false;
+  actionBtn.textContent = '暂停';
   actionBtn.classList.add('running');
+  actionBtn.classList.remove('paused');
   glowRing.classList.add('on');
 
   initSounds();
@@ -273,17 +320,28 @@ async function run() {
 
 function countdown(sec) {
   return new Promise(resolve => {
-    const start = Date.now();
+    let remaining = sec * 1000;
+    let last = Date.now();
+    let lastTickSec = -1;
     function tick() {
       if (s.cancelled) { resolve(); return; }
-      const elapsed = Date.now() - start;
-      const remain = Math.max(0, Math.ceil((sec * 1000 - elapsed) / 1000));
-      timerNum.textContent = String(remain).padStart(2, '0');
-      progress.style.strokeDashoffset = CIRCUM * (1 - Math.min(elapsed / (sec*1000), 1));
-      const curSec = Math.ceil(elapsed / 1000);
-      if (curSec > 0 && curSec <= sec && elapsed - (curSec-1)*1000 < 30) { beep('tick'); }
-      if (elapsed >= sec * 1000) resolve();
-      else requestAnimationFrame(tick);
+      const now = Date.now();
+      const dt = now - last;
+      last = now;
+      if (!s.paused) {
+        remaining -= dt;
+        const elapsed = sec * 1000 - remaining;
+        const remain = Math.max(0, Math.ceil(remaining / 1000));
+        timerNum.textContent = String(remain).padStart(2, '0');
+        progress.style.strokeDashoffset = CIRCUM * (1 - Math.min(elapsed / (sec * 1000), 1));
+        const curSec = Math.floor(elapsed / 1000);
+        if (curSec > lastTickSec && curSec > 0 && curSec <= sec) {
+          lastTickSec = curSec;
+          beep('tick');
+        }
+        if (remaining <= 0) { resolve(); return; }
+      }
+      requestAnimationFrame(tick);
     }
     tick();
   });
@@ -310,11 +368,27 @@ async function resetAll() {
   progress.style.strokeDashoffset = CIRCUM;
   glowRing.classList.remove('on');
   dots.forEach(d => d.className = 'dot');
+  s.paused = false;
   actionBtn.textContent = '开始';
   actionBtn.classList.remove('running');
+  actionBtn.classList.remove('paused');
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function sleep(ms) {
+  return new Promise(async resolve => {
+    let left = ms;
+    let last = Date.now();
+    while (left > 0) {
+      if (s.cancelled) { resolve(); return; }
+      await new Promise(r => setTimeout(r, 40));
+      const now = Date.now();
+      const dt = now - last;
+      last = now;
+      if (!s.paused) left -= dt;
+    }
+    resolve();
+  });
+}
 
 // ── 声音测试 ──
 let testing = false;
@@ -338,7 +412,20 @@ testBtn.addEventListener('click', async function(e) {
 // ── 入口 ──
 function handleStart(e) {
   if (e) e.preventDefault();
-  if (s.running) return;
+  if (s.running && !s.paused) {
+    s.paused = true;
+    actionBtn.textContent = '继续';
+    actionBtn.classList.add('paused');
+    actionBtn.classList.remove('running');
+    return;
+  }
+  if (s.running && s.paused) {
+    s.paused = false;
+    actionBtn.textContent = '暂停';
+    actionBtn.classList.remove('paused');
+    actionBtn.classList.add('running');
+    return;
+  }
   warmAudio();
   initSounds();
   run();
@@ -347,7 +434,16 @@ function handleStart(e) {
 actionBtn.addEventListener('click', handleStart);
 actionBtn.addEventListener('touchstart', e => { e.preventDefault(); handleStart(e); }, { passive: false });
 document.addEventListener('keydown', e => {
-  if ((e.key === ' ' || e.key === 'Enter') && !s.running) { e.preventDefault(); actionBtn.click(); }
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); actionBtn.click(); }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && s.running && !s.paused) {
+    s.paused = true;
+    actionBtn.textContent = '继续';
+    actionBtn.classList.add('paused');
+    actionBtn.classList.remove('running');
+  }
 });
 
 initSounds();

@@ -3,54 +3,95 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1c1c1a">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>高位臀桥训练</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;color:#e0e0e6;font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;user-select:none;-webkit-user-select:none}
-.container{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:env(safe-area-inset-top,12px) 24px env(safe-area-inset-bottom,32px);position:relative}
-.header{text-align:center;padding-top:8px}
-.header h1{font-size:22px;font-weight:600;letter-spacing:2px;color:#d4d4de}
-.header .session-info{font-size:13px;color:#666;margin-top:4px;letter-spacing:1px}
-.header .session-info span{color:#4ade80}
-.circle-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;position:relative}
-.circle{position:relative;width:min(280px,70vw);height:min(280px,70vw);border-radius:50%;background:radial-gradient(circle at 30% 30%,#1a1a28,#0f0f18);border:2px solid #2a2a3a;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:border-color .3s}
-.circle.active{border-color:#4ade80}
-.circle .count{font-size:min(96px,23vw);font-weight:700;line-height:1;color:#f0f0f6;font-variant-numeric:tabular-nums}
-.circle .phase{font-size:min(22px,5.5vw);color:#4ade80;margin-top:6px;letter-spacing:3px;font-weight:500;height:28px}
-.circle .phase.pause-text{color:#fbbf24}
-.circle .phase.done-text{color:#60a5fa}
-.circle .timer{font-size:min(15px,3.8vw);color:#888;margin-top:2px;height:20px}
-.glow{position:absolute;inset:-6px;border-radius:50%;opacity:0;transition:opacity .6s;pointer-events:none}
-.glow.on{opacity:1;box-shadow:0 0 30px 6px rgba(74,222,128,.25),0 0 60px 12px rgba(74,222,128,.1)}
-.glow.pause-glow{box-shadow:0 0 30px 6px rgba(251,191,36,.25),0 0 60px 12px rgba(251,191,36,.1)}
-.ring-svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);pointer-events:none}
-.ring-bg{fill:none;stroke:#1e1e2e;stroke-width:3}
-.ring-fg{fill:none;stroke:rgba(74,222,128,.35);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .4s ease}
-.ring-pause{stroke:rgba(251,191,36,.35)}
-.controls{width:100%;display:flex;flex-direction:column;align-items:center;gap:16px}
-.dots{display:flex;gap:10px}
-.dot{width:10px;height:10px;border-radius:50%;background:#2a2a3a;transition:all .3s}
-.dot.done{background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.3)}
-.action-btn{-webkit-appearance:none;border:none;outline:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:16px;font-weight:600;padding:14px 40px;border-radius:30px;cursor:pointer;transition:all .25s;letter-spacing:3px;min-width:140px}
-.action-btn:active{transform:scale(.95)}
-.action-btn.running{background:rgba(74,222,128,.12);color:#4ade80;font-size:20px;letter-spacing:8px;min-width:140px}
-.action-btn.paused{background:rgba(251,191,36,.15);color:#fbbf24;font-size:16px;letter-spacing:3px;min-width:140px}
-.sub-row{display:flex;align-items:center;gap:16px}
-.test-btn{font-size:13px;color:#555;text-decoration:none;border:none;background:none;cursor:pointer;transition:color .2s}
-.test-btn:active{color:#888}
-.confetti-wrap{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.confetti{position:absolute;width:6px;height:6px;border-radius:50%;opacity:0;animation:confetti-fall 2s ease-out forwards}
-@keyframes confetti-fall{0%{opacity:1;transform:translateY(0) rotate(0deg) scale(1)}100%{opacity:0;transform:translateY(300px) rotate(720deg) scale(.3)}}
-@media(max-width:420px){.circle{width:min(240px,68vw);height:min(240px,68vw)}.circle .count{font-size:min(80px,22vw)}}
+  :root{
+    --bg:#f7f6f2; --bg-elev:#efeee9; --bg-subtle:#e6e4dc; --ink:#1c1c1a; --ink-2:#4a4a46;
+    --ink-muted:#8a8983; --mid:#b5b3ab; --hairline:rgba(28,28,26,.09);
+    --font:'PingFang SC','Source Han Serif SC','Noto Serif SC','Songti SC',Georgia,serif;
+    --font-en:Georgia,'Times New Roman',serif;
+    --font-label:-apple-system,'Segoe UI',system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
+    font-family:var(--font);user-select:none;-webkit-user-select:none;-webkit-font-smoothing:antialiased}
+  .container{
+    width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+    padding:max(12px,env(safe-area-inset-top)) 24px max(28px,env(safe-area-inset-bottom));position:relative;
+  }
+  .header{text-align:center;padding-top:10px}
+  .header .kicker{
+    font-family:var(--font-label);font-size:11px;font-weight:600;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--ink-muted);margin-bottom:8px;
+  }
+  .header h1{font-size:22px;font-weight:600;letter-spacing:.04em;color:var(--ink)}
+  .header .session-info{font-size:13px;color:var(--ink-muted);margin-top:8px;letter-spacing:.04em}
+  .header .session-info span{color:var(--ink-2);font-weight:600}
+  .circle-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;position:relative;min-height:0}
+  .circle{
+    position:relative;width:min(260px,70vw);height:min(260px,70vw);border-radius:50%;
+    background:#ebe9e2;border:1px solid rgba(28,28,26,.10);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    transition:background .35s,border-color .35s;
+  }
+  .circle.active{background:#e3e1d9;border-color:rgba(28,28,26,.16)}
+  .circle .count{
+    font-family:var(--font-en);font-size:min(72px,20vw);font-weight:600;line-height:1;
+    color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.03em;
+  }
+  .circle .phase{
+    font-size:min(15px,4vw);color:var(--ink-2);margin-top:8px;letter-spacing:.18em;font-weight:500;height:24px;
+  }
+  .circle .phase.pause-text{color:#a67c52}
+  .circle .phase.done-text{color:var(--ink)}
+  .circle .timer{font-size:min(13px,3.5vw);color:var(--ink-muted);margin-top:4px;height:20px}
+  .glow{position:absolute;inset:-4px;border-radius:50%;opacity:0;transition:opacity .5s;pointer-events:none}
+  .glow.on{opacity:1;box-shadow:0 0 0 1px rgba(28,28,26,.06)}
+  .glow.pause-glow{box-shadow:0 0 0 1px rgba(166,124,82,.2)}
+  .ring-svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);pointer-events:none}
+  .ring-bg{fill:none;stroke:rgba(28,28,26,.08);stroke-width:2.5}
+  .ring-fg{fill:none;stroke:rgba(28,28,26,.35);stroke-width:2.5;stroke-linecap:round;transition:stroke-dashoffset .35s ease}
+  .ring-pause{stroke:rgba(166,124,82,.45)}
+  .controls{width:100%;display:flex;flex-direction:column;align-items:center;gap:14px;padding-bottom:4px}
+  .dots{display:flex;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--bg-subtle);transition:all .3s}
+  .dot.done{background:var(--ink)}
+  .action-btn{
+    -webkit-appearance:none;border:none;outline:none;cursor:pointer;
+    width:100%;max-width:260px;padding:13px 24px;border-radius:999px;
+    background:var(--ink);color:var(--bg);font-family:var(--font);
+    font-size:16px;font-weight:600;letter-spacing:.14em;transition:opacity .18s,transform .12s;
+  }
+  .action-btn:active{transform:scale(.985)}
+  .action-btn.running{
+    background:transparent;border:1px solid var(--hairline);color:var(--ink);letter-spacing:.2em;
+  }
+  .action-btn.paused{
+    background:transparent;border:1px solid rgba(166,124,82,.35);color:#a67c52;letter-spacing:.14em;
+  }
+  .sub-row{display:flex;align-items:center;gap:20px}
+  .test-btn{
+    font-family:var(--font-label);font-size:12px;color:var(--ink-muted);letter-spacing:.06em;
+    text-decoration:none;border:none;background:none;cursor:pointer;padding:6px 8px;
+  }
+  .test-btn:active{color:var(--ink-2)}
+  .confetti-wrap{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .confetti{position:absolute;width:5px;height:5px;border-radius:50%;opacity:0;background:var(--mid);animation:confetti-fall 1.6s ease-out forwards}
+  @keyframes confetti-fall{0%{opacity:.7;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(220px) scale(.4)}}
+  @media(max-width:420px){.circle{width:min(230px,68vw);height:min(230px,68vw)}}
+
 </style>
 </head>
 <body>
 <div class="container" id="app">
   <div class="header">
+    <div class="kicker">Glute Bridge</div>
     <h1>高位臀桥</h1>
-    <div class="session-info" id="sessionInfo">第 <span>1</span> 次训练 · 今日 <span id="dayTotal">0</span> 个</div>
+    <div class="session-info" id="sessionInfo">第 <span>1</span> 次 · 今日 <span id="dayTotal">0</span> 次 · 每组 50</div>
   </div>
   <div class="circle-wrap">
     <div class="circle" id="circle">
@@ -221,9 +262,7 @@ function loadDay() {
       const today = new Date().toDateString();
       if (d.date === today) {
         s.dayTotal = d.total || 0;
-        if (d.total >= 150) s.session = 3;
-        else if (d.total >= 50) s.session = 2;
-        else s.session = 1;
+        s.session = Math.min(4, Math.floor((d.total || 0) / 50) + 1);
         return;
       }
     }
@@ -301,7 +340,7 @@ function setPhase(name, timerText) {
   const phaseInfo = PHASES[name];
   if (!phaseInfo) {
     if (name === 'idle') { el.phase.textContent = '准备开始'; el.phase.className = 'phase'; el.timer.textContent = ''; }
-    else if (name === 'done') { el.phase.textContent = s.session > 3 ? '今日训练完成!' : '本次训练完成!'; el.phase.className = 'phase done-text'; el.timer.textContent = '明天继续 💪'; }
+    else if (name === 'done') { el.phase.textContent = s.session > 3 ? '今日训练完成!' : '本次训练完成!'; el.phase.className = 'phase done-text'; el.timer.textContent = '明天继续'; }
     else if (name === 'pause') { el.phase.textContent = '已暂停'; el.phase.className = 'phase pause-text'; el.timer.textContent = '点击继续'; }
     return;
   }
@@ -315,8 +354,8 @@ function celebrate() {
   const wrap = document.createElement('div');
   wrap.className = 'confetti-wrap';
   el.circle.appendChild(wrap);
-  const colors = ['#4ade80','#60a5fa','#fbbf24','#f472b6','#a78bfa','#34d399'];
-  for (let i = 0; i < 30; i++) {
+  const colors = ['#b5b3ab','#8a8983','#4a4a46','#d4a574'];
+  for (let i = 0; i < 12; i++) {
     const c = document.createElement('div');
     c.className = 'confetti';
     c.style.left = Math.random() * 100 + '%';
@@ -347,7 +386,7 @@ async function trainingLoop() {
   await playVoice(sessionKey);
   await sleep(300);
 
-  while (s.reps < 100 && !cancelLoop) {
+  while (s.reps < 50 && !cancelLoop) {
     if (s.state === 'paused') { await waitForResume(); if (cancelLoop) break; }
 
     s.reps++;
@@ -431,9 +470,7 @@ async function countdownWithPause(duration, tickEvery) {
 function checkMilestone(reps) {
   if (reps === 20) { milestoneSound(); playVoice('m20'); }
   else if (reps === 40) { milestoneSound(); playVoice('m40'); }
-  else if (reps === 60) { milestoneSound(); playVoice('m60'); }
-  else if (reps === 80) { milestoneSound(); playVoice('m80'); }
-  else if (reps === 100) { celebrate(); playVoice('m100'); }
+  else if (reps === 50) { celebrate(); /* voice played once after loop check */ }
 }
 
 function finishSession() {
