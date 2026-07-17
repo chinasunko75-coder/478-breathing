@@ -91,7 +91,7 @@
   <div class="header">
     <div class="kicker">Glute Bridge</div>
     <h1>高位臀桥</h1>
-    <div class="session-info" id="sessionInfo">第 <span>1</span> 次 · 今日 <span id="dayTotal">0</span> 次 · 每组 50</div>
+    <div class="session-info" id="sessionInfo">第 <span>1</span> 次 · 今日累计 <span id="dayTotal">0</span> 个 · 每组 50</div>
   </div>
   <div class="circle-wrap">
     <div class="circle" id="circle">
@@ -235,6 +235,7 @@ const PHASE_KEYS = ['lift','hold','lower','rest'];
 
 let testing = false;
 let cancelLoop = false;
+let discardSession = false;
 let pauseResolver = null;
 let currentPhaseKey = null;
 
@@ -330,17 +331,32 @@ function updateDisplay() {
   const pct = Math.min(s.reps / 50, 1);
   el.ring.setAttribute('stroke-dashoffset', 289 - pct * 289);
   el.dots.forEach((d, i) => { d.classList.toggle('done', i < s.session); });
-  if (s.state === 'idle') { el.action.textContent = s.session > 3 ? '已完成' : '开始训练'; el.action.classList.remove('running','paused'); }
+  if (s.state === 'idle') {
+    el.action.textContent = s.session > 3 ? '已完成' : (s.session === 1 ? '开始训练' : ('开始第 ' + s.session + ' 次'));
+    el.action.classList.remove('running','paused');
+  }
   else if (s.state === 'active') { el.action.textContent = '暂停'; el.action.classList.add('running'); el.action.classList.remove('paused'); }
   else if (s.state === 'paused') { el.action.textContent = '继续'; el.action.classList.add('paused'); el.action.classList.remove('running'); }
-  else if (s.state === 'done') { el.action.textContent = '已完成'; el.action.classList.remove('running','paused'); }
+  else if (s.state === 'done') {
+    el.action.textContent = s.session > 3 ? '已完成' : ('开始第 ' + s.session + ' 次');
+    el.action.classList.remove('running','paused');
+  }
 }
 
 function setPhase(name, timerText) {
   const phaseInfo = PHASES[name];
   if (!phaseInfo) {
     if (name === 'idle') { el.phase.textContent = '准备开始'; el.phase.className = 'phase'; el.timer.textContent = ''; }
-    else if (name === 'done') { el.phase.textContent = s.session > 3 ? '今日训练完成!' : '本次训练完成!'; el.phase.className = 'phase done-text'; el.timer.textContent = '明天继续'; }
+    else if (name === 'done') {
+      el.phase.className = 'phase done-text';
+      if (s.session > 3) {
+        el.phase.textContent = '今日训练完成';
+        el.timer.textContent = '明天继续';
+      } else {
+        el.phase.textContent = '本组完成';
+        el.timer.textContent = '今日还可练 ' + (4 - s.session) + ' 组';
+      }
+    }
     else if (name === 'pause') { el.phase.textContent = '已暂停'; el.phase.className = 'phase pause-text'; el.timer.textContent = '点击继续'; }
     return;
   }
@@ -432,7 +448,21 @@ async function trainingLoop() {
     }
   }
 
-  finishSession();
+  if (discardSession) {
+    discardSession = false;
+    return;
+  }
+  if (s.reps >= 50) {
+    finishSession();
+  } else {
+    // Mid-run abort without completing a set — do not count toward day total
+    s.state = 'idle';
+    s.reps = 0;
+    el.circle.classList.remove('active');
+    el.glow.classList.remove('on', 'pause-glow');
+    updateDisplay();
+    setPhase('idle');
+  }
 }
 
 function waitForResume() {
@@ -590,7 +620,12 @@ el.test.addEventListener('touchstart', async function(e) {
 }, { passive: false });
 
 el.reset.addEventListener('click', () => {
-  if (s.state === 'active' || s.state === 'paused') { cancelLoop = true; if (pauseResolver) pauseResolver(); }
+  const wasRunning = s.state === 'active' || s.state === 'paused';
+  if (wasRunning) {
+    discardSession = true;
+    cancelLoop = true;
+    if (pauseResolver) pauseResolver();
+  }
   s.dayTotal = 0; s.session = 1; s.state = 'idle'; s.reps = 0; cancelLoop = true;
   el.action.textContent = '开始训练';
   el.action.classList.remove('running','paused');
